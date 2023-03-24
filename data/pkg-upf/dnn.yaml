@@ -9,5 +9,5 @@ spec:
     name: vpc-internet
   pools:
     - name: pool1
-      #prefixLength: 24
+      prefixLength: 24
   

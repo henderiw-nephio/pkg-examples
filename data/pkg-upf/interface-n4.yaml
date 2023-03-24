@@ -7,5 +7,5 @@ metadata:
 spec:
   networkInstance:
     name: vpc-internal
-  cni: sriov
+  cniType: sriov
   attachementType: vlan
