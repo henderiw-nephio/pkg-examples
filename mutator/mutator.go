@@ -247,7 +247,7 @@ func (r *mutatorCtx) update() {
 		return
 	} else {
 		for _, obj := range diff.CreateConditions {
-			fn.Logf("delete condition: %s\n", kptfilelibv1.GetConditionType(&obj.Ref))
+			fn.Logf("create condition: %s\n", kptfilelibv1.GetConditionType(&obj.Ref))
 			// create condition again
 			kf.SetConditions(kptv1.Condition{
 				Type:   kptfilelibv1.GetConditionType(&obj.Ref),
