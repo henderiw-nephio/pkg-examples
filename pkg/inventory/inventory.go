@@ -81,7 +81,7 @@ func (r *inventory) Diff() (InventoryDiff, error) {
 		case invCtx.newResource == nil && invCtx.existingCondition != nil:
 			diff.DeleteConditions = append(diff.DeleteConditions, &Object{Ref: ref})
 		case invCtx.newResource != nil && invCtx.existingCondition == nil:
-			diff.CreateConditions = append(diff.DeleteConditions, &Object{Ref: ref})
+			diff.CreateConditions = append(diff.CreateConditions, &Object{Ref: ref})
 		case invCtx.existingResource == nil && invCtx.newResource != nil:
 			// create resource
 			diff.CreateObjs = append(diff.CreateObjs, &Object{Ref: ref, Obj: *invCtx.newResource})
