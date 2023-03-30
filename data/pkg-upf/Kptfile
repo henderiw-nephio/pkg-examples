@@ -6,8 +6,12 @@ metadata:
     config.kubernetes.io/local-config: "true"
 info:
   description: upf package example
-#pipeline:
-#  mutators:
-#  - image: xxx
-#  - image: yyy
-
+pipeline:
+  mutator:
+  - fnA
+  - fnC
+status:
+  conditions:
+  - type: k8s.cni.cncf.io/v1.NetworkAttachmentDefinition.n6
+    status: "False"
+    reason: create condition again as it was deleted
