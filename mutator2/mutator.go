@@ -19,7 +19,6 @@ import (
 
 type mutatorCtx struct {
 	fnruntime fnruntime.FnRuntime
-
 	siteCode *string
 }
 
@@ -29,11 +28,12 @@ func Run(rl *fn.ResourceList) (bool, error) {
 	m.fnruntime = fnruntime.New(
 		rl,
 		&fnruntime.Config{
-			For: map[corev1.ObjectReference]fnruntime.PopulateFn{
-				{
+			For: fnruntime.ForConfig{
+				ObjectRef: corev1.ObjectReference{
 					APIVersion: nephioreqv1alpha1.GroupVersion.Identifier(),
 					Kind:       nephioreqv1alpha1.InterfaceKind,
-				}: m.populateInterfaceFn,
+				},
+				PopulateFn: m.populateInterfaceFn,
 			},
 			Owns: map[corev1.ObjectReference]fnruntime.ConfigOperation{
 				{
@@ -84,7 +84,7 @@ func (r *mutatorCtx) populateInterfaceFn(o *fn.KubeObject) (map[corev1.ObjectRef
 		return nil, err
 	}
 
-	// we assume right now that is the CNITYpe is not set this is a loopback interface
+	// we assume right now that if the CNITYpe is not set this is a loopback interface
 	if itfce.Spec.CNIType != "" {
 		meta := metav1.ObjectMeta{
 			Name: o.GetName(),

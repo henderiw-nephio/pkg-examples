@@ -11,15 +11,23 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+const FnRuntimeOwner = "fnruntime.nephio.org/owner"
+const FnRuntimeDelete = "fnruntime.nephio.org/delete"
+
 type FnRuntime interface {
 	Run()
 }
 
 type Config struct {
-	For         map[corev1.ObjectReference]PopulateFn
+	For         ForConfig
 	Owns        map[corev1.ObjectReference]ConfigOperation
 	Watch       map[corev1.ObjectReference]WatchCallbackFn
 	ConditionFn ConditionFn
+}
+
+type ForConfig struct {
+	ObjectRef  corev1.ObjectReference
+	PopulateFn PopulateFn
 }
 
 type ConfigOperation string
@@ -86,7 +94,8 @@ func (r *fnRuntime) initialize() {
 			// populate condition inventory
 			for objRef := range r.cfg.Owns {
 				for _, c := range kf.GetConditions() {
-					if strings.Contains(c.Type, kptfilelibv1.GetConditionType(&objRef)) {
+					if strings.Contains(c.Type, kptfilelibv1.GetConditionType(&objRef)) &&
+						c.Reason == kptfilelibv1.GetConditionType(&r.cfg.For.ObjectRef) {
 						r.inventory.AddExistingCondition(kptfilelibv1.GetGVKNFromConditionType(c.Type), &c)
 					}
 				}
@@ -94,7 +103,9 @@ func (r *fnRuntime) initialize() {
 		}
 
 		for objRef := range r.cfg.Owns {
-			if o.GetAPIVersion() == objRef.APIVersion && o.GetKind() == objRef.Kind {
+			if o.GetAPIVersion() == objRef.APIVersion && o.GetKind() == objRef.Kind &&
+				o.GetAnnotation(FnRuntimeOwner) == kptfilelibv1.GetConditionType(&r.cfg.For.ObjectRef) {
+
 				r.inventory.AddExistingResource(&corev1.ObjectReference{
 					APIVersion: objRef.APIVersion,
 					Kind:       objRef.Kind,
@@ -104,7 +115,8 @@ func (r *fnRuntime) initialize() {
 		}
 
 		for objRef, watchCallbackFn := range r.cfg.Watch {
-			if o.GetAPIVersion() == objRef.APIVersion && o.GetKind() == objRef.Kind {
+			if o.GetAPIVersion() == objRef.APIVersion &&
+				o.GetKind() == objRef.Kind {
 				// provide watch resource
 				if err := watchCallbackFn(o); err != nil {
 					r.rl.AddResult(err, o)
@@ -112,16 +124,6 @@ func (r *fnRuntime) initialize() {
 
 			}
 		}
-		/*
-			if o.GetAPIVersion() == infrav1alpha1.SchemeBuilder.GroupVersion.Identifier() && o.GetKind() == reflect.TypeOf(infrav1alpha1.ClusterContext{}).Name() {
-				clusterContext := clusterctxtlibv1alpha1.NewMutator(o.String())
-				cluster, err := clusterContext.UnMarshal()
-				if err != nil {
-					r.rl.AddResult(err, o)
-				}
-				r.siteCode = cluster.Spec.SiteCode
-			}
-		*/
 	}
 }
 
@@ -129,20 +131,19 @@ func (r *fnRuntime) populate() {
 	// func generalPopulateConditionFn() bool
 	if r.conditionFn() {
 		for _, o := range r.rl.GetObjects() {
-			for objRef, populateFn := range r.cfg.For {
-				if o.GetAPIVersion() == objRef.APIVersion && o.GetKind() == objRef.Kind {
-					if populateFn != nil {
-						res, err := populateFn(o)
-						if err != nil {
-							r.rl.AddResult(err, o)
-						} else {
-							for objRef, newObj := range res {
-								r.inventory.AddNewResource(&corev1.ObjectReference{
-									APIVersion: objRef.APIVersion,
-									Kind:       objRef.Kind,
-									Name:       o.GetName(),
-								}, newObj)
-							}
+			if o.GetAPIVersion() == r.cfg.For.ObjectRef.APIVersion && o.GetKind() == r.cfg.For.ObjectRef.Kind {
+				if r.cfg.For.PopulateFn != nil {
+					res, err := r.cfg.For.PopulateFn(o)
+					if err != nil {
+						r.rl.AddResult(err, o)
+					} else {
+						for objRef, newObj := range res {
+							newObj.SetAnnotation(FnRuntimeOwner, kptfilelibv1.GetConditionType(&r.cfg.For.ObjectRef))
+							r.inventory.AddNewResource(&corev1.ObjectReference{
+								APIVersion: objRef.APIVersion,
+								Kind:       objRef.Kind,
+								Name:       o.GetName(),
+							}, newObj)
 						}
 					}
 				}
@@ -172,12 +173,14 @@ func (r *fnRuntime) update() {
 			fn.Logf("create set condition: %s\n", kptfilelibv1.GetConditionType(&obj.Ref))
 			// set condition
 			kf.SetConditions(kptv1.Condition{
-				Type:   strings.ReplaceAll(kptfilelibv1.GetConditionType(&obj.Ref), "/", "_"),
+				Type:   kptfilelibv1.GetConditionType(&obj.Ref),
 				Status: kptv1.ConditionFalse,
-				Reason: "cluster context has no site id",
+				Reason: kptfilelibv1.GetConditionType(&r.cfg.For.ObjectRef),
+				Message: "cluster context has no site id",
 			})
 			// update the release timestamp
-			r.rl.SetObjectWithDeleteTimestamp(&obj.Obj)
+			obj.Obj.SetAnnotation(FnRuntimeDelete, "true")
+			r.rl.SetObject(&obj.Obj)
 		}
 		return
 	} else {
@@ -187,13 +190,14 @@ func (r *fnRuntime) update() {
 			kf.SetConditions(kptv1.Condition{
 				Type:   kptfilelibv1.GetConditionType(&obj.Ref),
 				Status: kptv1.ConditionFalse,
-				Reason: "create condition again as it was deleted",
+				Reason: kptfilelibv1.GetConditionType(&r.cfg.For.ObjectRef),
+				Message: "create condition again as it was deleted",
 			})
 		}
 		for _, obj := range diff.DeleteConditions {
 			fn.Logf("delete condition: %s\n", kptfilelibv1.GetConditionType(&obj.Ref))
 			// delete condition
-			kf.DeleteCondition(strings.ReplaceAll(kptfilelibv1.GetConditionType(&obj.Ref), "/", "_"))
+			kf.DeleteCondition(kptfilelibv1.GetConditionType(&obj.Ref))
 		}
 		for _, obj := range diff.CreateObjs {
 			fn.Logf("create set condition: %s\n", kptfilelibv1.GetConditionType(&obj.Ref))
@@ -201,7 +205,8 @@ func (r *fnRuntime) update() {
 			kf.SetConditions(kptv1.Condition{
 				Type:   kptfilelibv1.GetConditionType(&obj.Ref),
 				Status: kptv1.ConditionFalse,
-				Reason: "create new resource",
+				Reason: kptfilelibv1.GetConditionType(&r.cfg.For.ObjectRef),
+				Message: "create new resource",
 			})
 
 			if r.cfg.Owns[corev1.ObjectReference{APIVersion: obj.Ref.APIVersion, Kind: obj.Ref.Kind}] == ConfigOperationDefault {
@@ -212,9 +217,10 @@ func (r *fnRuntime) update() {
 			fn.Logf("update set condition: %s\n", kptfilelibv1.GetConditionType(&obj.Ref))
 			// update condition - add resource to resource list
 			kf.SetConditions(kptv1.Condition{
-				Type:   strings.ReplaceAll(kptfilelibv1.GetConditionType(&obj.Ref), "/", "_"),
+				Type:   kptfilelibv1.GetConditionType(&obj.Ref),
 				Status: kptv1.ConditionFalse,
-				Reason: "update existing resource",
+				Reason: kptfilelibv1.GetConditionType(&r.cfg.For.ObjectRef),
+				Message: "update existing resource",
 			})
 			if r.cfg.Owns[corev1.ObjectReference{APIVersion: obj.Ref.APIVersion, Kind: obj.Ref.Kind}] == ConfigOperationDefault {
 				r.rl.SetObject(&obj.Obj)
@@ -224,12 +230,14 @@ func (r *fnRuntime) update() {
 			fn.Logf("update set condition: %s\n", kptfilelibv1.GetConditionType(&obj.Ref))
 			// create condition - add resource to resource list
 			kf.SetConditions(kptv1.Condition{
-				Type:   strings.ReplaceAll(kptfilelibv1.GetConditionType(&obj.Ref), "/", "_"),
+				Type:   kptfilelibv1.GetConditionType(&obj.Ref),
 				Status: kptv1.ConditionFalse,
-				Reason: "delete existing resource",
+				Reason: kptfilelibv1.GetConditionType(&r.cfg.For.ObjectRef),
+				Message: "delete existing resource",
 			})
 			// update resource to resoucelist with delete Timestamp set
-			r.rl.SetObjectWithDeleteTimestamp(&obj.Obj)
+			obj.Obj.SetAnnotation(FnRuntimeDelete, "true")
+			r.rl.SetObject(&obj.Obj)
 		}
 	}
 
