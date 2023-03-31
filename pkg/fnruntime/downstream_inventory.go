@@ -7,28 +7,28 @@ import (
 )
 
 type DownstreamInventory interface {
-	AddCondition(owner corev1.ObjectReference, resource corev1.ObjectReference, c *kptv1.Condition)
-	AddResource(owner corev1.ObjectReference, resource corev1.ObjectReference, o *fn.KubeObject)
-	AddForCondition(owner corev1.ObjectReference, c *kptv1.Condition)
-	AddForResource(owner corev1.ObjectReference, o *fn.KubeObject)
-	GetForConditionStatus(owner corev1.ObjectReference) bool
-	IsReady() map[corev1.ObjectReference]*ReadyCtx
+	AddCondition(name string, resource *corev1.ObjectReference, c *kptv1.Condition)
+	AddResource(name string, resource *corev1.ObjectReference, o *fn.KubeObject)
+	AddForCondition(name string, c *kptv1.Condition)
+	AddForResource(name string, o *fn.KubeObject)
+	GetForConditionStatus(name string) bool
+	GetReadinessStatus() map[string]*ReadyCtx
 }
 
 func NewDownstreamInventory() DownstreamInventory {
 	return &downstreamInventory{
-		ownerResources: map[corev1.ObjectReference]*downstreamResources{},
+		namedResources: map[string]*downstreamResources{},
 	}
 }
 
 type downstreamInventory struct {
-	ownerResources map[corev1.ObjectReference]*downstreamResources
+	namedResources map[string]*downstreamResources
 }
 
 type downstreamResources struct {
 	resources    map[corev1.ObjectReference]*downstreamInventoryCtx
 	forObj       *fn.KubeObject
-	forCondition *kptv1.Condition
+	forCondition kptv1.Condition
 }
 
 type downstreamInventoryCtx struct {
@@ -36,82 +36,94 @@ type downstreamInventoryCtx struct {
 	obj       *fn.KubeObject
 }
 
-func (r *downstreamInventory) AddCondition(owner corev1.ObjectReference, resource corev1.ObjectReference, c *kptv1.Condition) {
-	if _, ok := r.ownerResources[owner]; !ok {
-		r.ownerResources[owner] = &downstreamResources{
+func (r *downstreamInventory) AddCondition(name string, resource *corev1.ObjectReference, c *kptv1.Condition) {
+	if _, ok := r.namedResources[name]; !ok {
+		r.namedResources[name] = &downstreamResources{
 			resources: map[corev1.ObjectReference]*downstreamInventoryCtx{},
 		}
 	}
-	if r.ownerResources[owner].resources[resource] == nil {
-		r.ownerResources[owner].resources[resource] = &downstreamInventoryCtx{}
+	if r.namedResources[name].resources[*resource] == nil {
+		r.namedResources[name].resources[*resource] = &downstreamInventoryCtx{}
 	}
-	r.ownerResources[owner].resources[resource].condition = c
+	r.namedResources[name].resources[*resource].condition = c
 }
 
-func (r *downstreamInventory) AddResource(owner corev1.ObjectReference, resource corev1.ObjectReference, o *fn.KubeObject) {
-	if _, ok := r.ownerResources[owner]; !ok {
-		r.ownerResources[owner] = &downstreamResources{
+func (r *downstreamInventory) AddResource(name string, resource *corev1.ObjectReference, o *fn.KubeObject) {
+	if _, ok := r.namedResources[name]; !ok {
+		r.namedResources[name] = &downstreamResources{
 			resources: map[corev1.ObjectReference]*downstreamInventoryCtx{},
 		}
 	}
-	if r.ownerResources[owner].resources[resource] == nil {
-		r.ownerResources[owner].resources[resource] = &downstreamInventoryCtx{}
+	if r.namedResources[name].resources[*resource] == nil {
+		r.namedResources[name].resources[*resource] = &downstreamInventoryCtx{}
 	}
-	r.ownerResources[owner].resources[resource].obj = o
+	r.namedResources[name].resources[*resource].obj = o
 }
 
-func (r *downstreamInventory) AddForCondition(owner corev1.ObjectReference, c *kptv1.Condition) {
-	if _, ok := r.ownerResources[owner]; !ok {
-		r.ownerResources[owner] = &downstreamResources{
+func (r *downstreamInventory) AddForCondition(name string, c *kptv1.Condition) {
+	if _, ok := r.namedResources[name]; !ok {
+		r.namedResources[name] = &downstreamResources{
 			resources: map[corev1.ObjectReference]*downstreamInventoryCtx{},
 		}
 	}
-	r.ownerResources[owner].forCondition = c
+	r.namedResources[name].forCondition = *c
 }
 
-func (r *downstreamInventory) AddForResource(owner corev1.ObjectReference, o *fn.KubeObject) {
-	if _, ok := r.ownerResources[owner]; !ok {
-		r.ownerResources[owner] = &downstreamResources{
+func (r *downstreamInventory) AddForResource(name string, o *fn.KubeObject) {
+	if _, ok := r.namedResources[name]; !ok {
+		r.namedResources[name] = &downstreamResources{
 			resources: map[corev1.ObjectReference]*downstreamInventoryCtx{},
 		}
 	}
-	r.ownerResources[owner].forObj = o
+	r.namedResources[name].forObj = o
 }
 
-func (r *downstreamInventory) GetForConditionStatus(owner corev1.ObjectReference) bool {
-	c, ok := r.ownerResources[owner]
+func (r *downstreamInventory) GetForConditionStatus(name string) bool {
+	c, ok := r.namedResources[name]
 	if !ok {
 		// this should not happen
 		return false
 	}
 	return c.forCondition.Status == kptv1.ConditionFalse
-
 }
 
-func (r *downstreamInventory) IsReady() map[corev1.ObjectReference]*ReadyCtx {
-	readyMap := map[corev1.ObjectReference]*ReadyCtx{}
-	for ownerRef, ref := range r.ownerResources {
-		readyMap[ownerRef] = &ReadyCtx{
-			ForObj:       ref.forObj,
+func (r *downstreamInventory) GetReadinessStatus() map[string]*ReadyCtx {
+	readyMap := map[string]*ReadyCtx{}
+	for name, ref := range r.namedResources {
+		readyMap[name] = &ReadyCtx{
 			ForCondition: ref.forCondition,
+			Objs:         map[corev1.ObjectReference]fn.KubeObject{},
 		}
+		if ref.forObj != nil {
+			readyMap[name].ForObj = ref.forObj
+		}
+
+		// if no child resources exist we return empty
+		if len(ref.resources) == 0 {
+			readyMap[name].Ready = false
+			return readyMap
+		}
+
+		readyMap[name].Ready = true
 		for objRef, invCtx := range ref.resources {
-			// this is a strange case as the condition is ready but there is no related resource
-			// to be flagged
-			if invCtx.obj == nil || invCtx.condition.Status == kptv1.ConditionFalse {
-				readyMap[ownerRef].Ready = false
+			// not all resources have a condition set e.g. interface
+			//
+			if invCtx.condition != nil && invCtx.condition.Status == kptv1.ConditionFalse {
+				readyMap[name].Ready = false
 				break
 			}
-			readyMap[ownerRef].Objs[objRef] = invCtx.obj
+			// not all resources have an associated object
+			if invCtx.obj != nil {
+				readyMap[name].Objs[objRef] = *invCtx.obj
+			}
 		}
-		readyMap[ownerRef].Ready = true
 	}
 	return readyMap
 }
 
 type ReadyCtx struct {
 	Ready        bool
-	Objs         map[corev1.ObjectReference]*fn.KubeObject
+	Objs         map[corev1.ObjectReference]fn.KubeObject
 	ForObj       *fn.KubeObject
-	ForCondition *kptv1.Condition
+	ForCondition kptv1.Condition
 }

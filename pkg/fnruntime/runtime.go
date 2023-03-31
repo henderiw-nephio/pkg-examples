@@ -22,4 +22,4 @@ func conditionFnNop() bool {
 	return true
 }
 
-type GenerateFn func(map[corev1.ObjectReference]*fn.KubeObject) (*fn.KubeObject, error)
+type GenerateFn func(map[corev1.ObjectReference]fn.KubeObject) (*fn.KubeObject, error)

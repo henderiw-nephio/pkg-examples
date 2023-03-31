@@ -8,7 +8,9 @@ import (
 	"github.com/example.com/foo/pkg/fnruntime"
 	nadlibv1 "github.com/example.com/foo/pkg/nad/v1"
 	nadv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	nephioreqv1alpha1 "github.com/nephio-project/api/nf_requirements/v1alpha1"
 	infrav1alpha1 "github.com/nephio-project/nephio-controller-poc/apis/infra/v1alpha1"
+	ipamv1alpha1 "github.com/nokia/k8s-ipam/apis/ipam/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -30,6 +32,16 @@ func Run(rl *fn.ResourceList) (bool, error) {
 					Kind:       reflect.TypeOf(nadv1.NetworkAttachmentDefinition{}).Name(),
 				},
 				GenerateFn: m.generateNadFn,
+			},
+			Owns: map[corev1.ObjectReference]struct{}{
+				{
+					APIVersion: ipamv1alpha1.GroupVersion.Identifier(),
+					Kind:       ipamv1alpha1.IPAllocationKind,
+				}: {},
+				{
+					APIVersion: nephioreqv1alpha1.GroupVersion.Identifier(),
+					Kind:       nephioreqv1alpha1.InterfaceKind,
+				}: {},
 			},
 			Watch: map[corev1.ObjectReference]fnruntime.WatchCallbackFn{
 				{
@@ -55,12 +67,15 @@ func (r *mutatorCtx) ClusterContextCallbackFn(o *fn.KubeObject) error {
 	return nil
 }
 
-func (r *mutatorCtx) generateNadFn(resources map[corev1.ObjectReference]*fn.KubeObject) (*fn.KubeObject, error) {
+func (r *mutatorCtx) generateNadFn(resources map[corev1.ObjectReference]fn.KubeObject) (*fn.KubeObject, error) {
 
 	// loop throough resource get ip, vlan and masterInterface and generate a nad
 
 	meta := metav1.ObjectMeta{
 		Name: "dummyName",
+	}
+	for _, o := range resources {
+		meta.Name = o.GetName()
 	}
 
 	return nadlibv1.NewGenerator(meta, nadv1.NetworkAttachmentDefinitionSpec{}).ParseKubeObject()
