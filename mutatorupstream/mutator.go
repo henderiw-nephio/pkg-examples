@@ -1,4 +1,4 @@
-package mutator2
+package mutatorupstream
 
 import (
 	"reflect"
@@ -19,39 +19,39 @@ import (
 
 type mutatorCtx struct {
 	fnruntime fnruntime.FnRuntime
-	siteCode *string
+	siteCode  *string
 }
 
 func Run(rl *fn.ResourceList) (bool, error) {
 	m := mutatorCtx{}
 
-	m.fnruntime = fnruntime.New(
+	m.fnruntime = fnruntime.NewUpstream(
 		rl,
-		&fnruntime.Config{
-			For: fnruntime.ForConfig{
+		&fnruntime.UpstreamRuntimeConfig{
+			For: fnruntime.UpstreamRuntimeForConfig{
 				ObjectRef: corev1.ObjectReference{
 					APIVersion: nephioreqv1alpha1.GroupVersion.Identifier(),
 					Kind:       nephioreqv1alpha1.InterfaceKind,
 				},
 				PopulateFn: m.populateInterfaceFn,
 			},
-			Owns: map[corev1.ObjectReference]fnruntime.ConfigOperation{
+			Owns: map[corev1.ObjectReference]fnruntime.UpstreamRuntimeConfigOperation{
 				{
 					APIVersion: nadv1.SchemeGroupVersion.Identifier(),
 					Kind:       reflect.TypeOf(nadv1.NetworkAttachmentDefinition{}).Name(),
-				}: fnruntime.ConfigOperationConditionOnly,
+				}: fnruntime.UpstreamRuntimeConfigOperationConditionOnly,
 				{
 					APIVersion: ipamv1alpha1.GroupVersion.Identifier(),
 					Kind:       ipamv1alpha1.IPAllocationKind,
-				}: fnruntime.ConfigOperationDefault,
-				// VLAN to be added as the 
+				}: fnruntime.UpstreamRuntimeConfigOperationDefault,
+				// VLAN to be added as the
 				// NF Deployment to be added like the NAD -> this is a global iso per interface
 			},
 			Watch: map[corev1.ObjectReference]fnruntime.WatchCallbackFn{
 				{
 					APIVersion: infrav1alpha1.GroupVersion.Identifier(),
 					Kind:       reflect.TypeOf(infrav1alpha1.ClusterContext{}).Name(),
-				}: m.watchCallbackFn,
+				}: m.ClusterContextCallbackFn,
 			},
 			ConditionFn: m.populateConditionFn,
 		},
@@ -60,7 +60,7 @@ func Run(rl *fn.ResourceList) (bool, error) {
 	return true, nil
 }
 
-func (r *mutatorCtx) watchCallbackFn(o *fn.KubeObject) error {
+func (r *mutatorCtx) ClusterContextCallbackFn(o *fn.KubeObject) error {
 	if o.GetAPIVersion() == infrav1alpha1.SchemeBuilder.GroupVersion.Identifier() && o.GetKind() == reflect.TypeOf(infrav1alpha1.ClusterContext{}).Name() {
 		clusterContext := clusterctxtlibv1alpha1.NewMutator(o.String())
 		cluster, err := clusterContext.UnMarshal()
