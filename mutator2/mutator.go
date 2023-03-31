@@ -44,7 +44,8 @@ func Run(rl *fn.ResourceList) (bool, error) {
 					APIVersion: ipamv1alpha1.GroupVersion.Identifier(),
 					Kind:       ipamv1alpha1.IPAllocationKind,
 				}: fnruntime.ConfigOperationDefault,
-				// VLAN to be added
+				// VLAN to be added as the 
+				// NF Deployment to be added like the NAD -> this is a global iso per interface
 			},
 			Watch: map[corev1.ObjectReference]fnruntime.WatchCallbackFn{
 				{
