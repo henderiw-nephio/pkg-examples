@@ -60,9 +60,8 @@ func Run(rl *fn.ResourceList) (bool, error) {
 func (r *mutatorCtx) initialize() {
 	for _, o := range r.rl.GetObjects() {
 		if o.GetAPIVersion() == kptv1.KptFileGVK().GroupVersion().String() && o.GetKind() == kptv1.KptFileName {
-			kf := kptfilelibv1.NewMutator(o.String())
-			var err error
-			if _, err = kf.UnMarshal(); err != nil {
+			kf, err := kptfilelibv1.New(o.String())
+			if err != nil {
 				fn.Log("error unmarshal kptfile in initialize")
 				r.rl.AddResult(err, o)
 			}
@@ -143,7 +142,9 @@ func (r *mutatorCtx) populate() {
 						meta,
 						ipamv1alpha1.IPAllocationSpec{
 							PrefixKind:      ipamv1alpha1.PrefixKindNetwork,
-							NetworkInstance: itfce.Spec.NetworkInstance.Name,
+							NetworkInstanceRef: &ipamv1alpha1.NetworkInstanceReference{
+								Name: itfce.Spec.NetworkInstance.Name,
+							},
 							Selector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{
 									//ipamv1alpha1.NephioSiteKey: *r.siteCode,
@@ -183,7 +184,9 @@ func (r *mutatorCtx) populate() {
 						},
 						ipamv1alpha1.IPAllocationSpec{
 							PrefixKind:      ipamv1alpha1.PrefixKindLoopback,
-							NetworkInstance: itfce.Spec.NetworkInstance.Name,
+							NetworkInstanceRef: &ipamv1alpha1.NetworkInstanceReference{
+								Name: itfce.Spec.NetworkInstance.Name,
+							},
 							Selector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{
 									//ipamv1alpha1.NephioSiteKey: *r.siteCode,
@@ -218,10 +221,9 @@ func (r *mutatorCtx) populate() {
 // respective controllers/functions take care of the resource deletion
 func (r *mutatorCtx) update() {
 	// kptfile
-	kf := kptfilelibv1.NewMutator(r.rl.GetObjects()[0].String())
-	var err error
-	if _, err = kf.UnMarshal(); err != nil {
-		fn.Log("error unmarshal kptfile")
+	kf, err := kptfilelibv1.New(r.rl.GetObjects()[0].String())
+	if err != nil {
+		fn.Log("error unmarshal kptfile in initialize")
 		r.rl.AddResult(err, r.rl.GetObjects()[0])
 	}
 

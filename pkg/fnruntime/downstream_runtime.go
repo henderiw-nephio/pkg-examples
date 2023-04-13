@@ -54,12 +54,11 @@ func (r *downstreamFnRuntime) initialize() {
 		// we assume the kpt file is always resource idx 0 in the resourcelist
 		o := r.rl.GetObjects()[0]
 
-		kf := kptfilelibv1.NewMutator(o.String())
-		var err error
-		if _, err = kf.UnMarshal(); err != nil {
-			fn.Log("error unmarshal kptfile in initialize")
-			r.rl.AddResult(err, o)
-		}
+		kf, err := kptfilelibv1.New(o.String())
+			if err != nil {
+				fn.Log("error unmarshal kptfile in initialize")
+				r.rl.AddResult(err, o)
+			}
 
 		// populate condition inventory
 		for _, c := range kf.GetConditions() {
@@ -124,10 +123,9 @@ func (r *downstreamFnRuntime) initialize() {
 }
 
 func (r *downstreamFnRuntime) update() {
-	kf := kptfilelibv1.NewMutator(r.rl.GetObjects()[0].String())
-	var err error
-	if _, err = kf.UnMarshal(); err != nil {
-		fn.Log("error unmarshal kptfile")
+	kf, err := kptfilelibv1.New(r.rl.GetObjects()[0].String())
+	if err != nil {
+		fn.Log("error unmarshal kptfile in initialize")
 		r.rl.AddResult(err, r.rl.GetObjects()[0])
 	}
 
@@ -157,6 +155,9 @@ func (r *downstreamFnRuntime) update() {
 				r.rl.DeleteObject(readyCtx.ForObj)
 				if delete {
 					kf.DeleteCondition(readyCtx.ForCondition.Type)
+				} else {
+					readyCtx.ForCondition.Message = "Not ready"
+					kf.SetConditions(readyCtx.ForCondition)
 				}
 			}
 		}

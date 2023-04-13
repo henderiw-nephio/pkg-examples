@@ -6,7 +6,6 @@ import (
 
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
 	kptv1 "github.com/GoogleContainerTools/kpt/pkg/api/kptfile/v1"
-	"github.com/example.com/foo/pkg/inventory"
 	kptfilelibv1 "github.com/example.com/foo/pkg/kptfile/v1"
 	"github.com/example.com/foo/pkg/kptrl"
 	corev1 "k8s.io/api/core/v1"
@@ -35,7 +34,7 @@ const (
 func NewUpstream(rl *fn.ResourceList, c *UpstreamRuntimeConfig) FnRuntime {
 	r := &upstreamFnRuntime{
 		cfg:         c,
-		inventory:   inventory.New(),
+		inv:         NewUpstreamInventory(),
 		rl:          kptrl.New(rl),
 		conditionFn: conditionFnNop,
 	}
@@ -48,7 +47,7 @@ func NewUpstream(rl *fn.ResourceList, c *UpstreamRuntimeConfig) FnRuntime {
 
 type upstreamFnRuntime struct {
 	cfg         *UpstreamRuntimeConfig
-	inventory   inventory.Inventory
+	inv         UpstreamInventory
 	rl          kptrl.ResourceList
 	conditionFn ConditionFn
 }
@@ -65,29 +64,30 @@ func (r *upstreamFnRuntime) Run() {
 func (r *upstreamFnRuntime) initialize() {
 	for _, o := range r.rl.GetObjects() {
 		if o.GetAPIVersion() == kptv1.KptFileGVK().GroupVersion().String() && o.GetKind() == kptv1.KptFileName {
-			kf := kptfilelibv1.NewMutator(o.String())
-			var err error
-			if _, err = kf.UnMarshal(); err != nil {
+
+			kf, err := kptfilelibv1.New(o.String())
+			if err != nil {
 				fn.Log("error unmarshal kptfile in initialize")
 				r.rl.AddResult(err, o)
 			}
 
-			// populate condition inventory
+			// populate condition inventory as existing conditions in the package
 			for objRef := range r.cfg.Owns {
 				for _, c := range kf.GetConditions() {
 					if strings.Contains(c.Type, kptfilelibv1.GetConditionType(&objRef)) &&
 						strings.Contains(c.Reason, kptfilelibv1.GetConditionType(&r.cfg.For.ObjectRef)) {
-						r.inventory.AddExistingCondition(kptfilelibv1.GetGVKNFromConditionType(c.Type), &c)
+						r.inv.AddExistingCondition(kptfilelibv1.GetGVKNFromConditionType(c.Type), &c)
 					}
 				}
 			}
 		}
 
+		// populate the inventory with own resources as an exisiting resource in the package
 		for objRef := range r.cfg.Owns {
 			if o.GetAPIVersion() == objRef.APIVersion && o.GetKind() == objRef.Kind &&
 				o.GetAnnotation(FnRuntimeOwner) == kptfilelibv1.GetConditionType(&r.cfg.For.ObjectRef) {
 
-				r.inventory.AddExistingResource(&corev1.ObjectReference{
+				r.inv.AddExistingResource(&corev1.ObjectReference{
 					APIVersion: objRef.APIVersion,
 					Kind:       objRef.Kind,
 					Name:       o.GetName(),
@@ -95,6 +95,8 @@ func (r *upstreamFnRuntime) initialize() {
 			}
 		}
 
+		// callback provides a means to provide the fn information
+		// on resources they are interested in and can make decisions on this
 		for objRef, watchCallbackFn := range r.cfg.Watch {
 			if o.GetAPIVersion() == objRef.APIVersion &&
 				o.GetKind() == objRef.Kind {
@@ -102,25 +104,26 @@ func (r *upstreamFnRuntime) initialize() {
 				if err := watchCallbackFn(o); err != nil {
 					r.rl.AddResult(err, o)
 				}
-
 			}
 		}
 	}
 }
 
+// populate populates the inventory with resources based on the For resource data
 func (r *upstreamFnRuntime) populate() {
-	// func generalPopulateConditionFn() bool
+	// the condition Fn allows to control the behavior if the populate needs to be executed
 	if r.conditionFn() {
 		for _, o := range r.rl.GetObjects() {
 			if o.GetAPIVersion() == r.cfg.For.ObjectRef.APIVersion && o.GetKind() == r.cfg.For.ObjectRef.Kind {
 				if r.cfg.For.PopulateFn != nil {
+					// call the external fn, which has the knowledge on how to populate the resources
 					res, err := r.cfg.For.PopulateFn(o)
 					if err != nil {
 						r.rl.AddResult(err, o)
 					} else {
 						for objRef, newObj := range res {
 							newObj.SetAnnotation(FnRuntimeOwner, kptfilelibv1.GetConditionType(&r.cfg.For.ObjectRef))
-							r.inventory.AddNewResource(&corev1.ObjectReference{
+							r.inv.AddNewResource(&corev1.ObjectReference{
 								APIVersion: objRef.APIVersion,
 								Kind:       objRef.Kind,
 								Name:       o.GetName(),
@@ -133,17 +136,18 @@ func (r *upstreamFnRuntime) populate() {
 	}
 }
 
+// update call the diff on inventory to find out the actions to take to make align the package
+// based on the latest data.
 func (r *upstreamFnRuntime) update() {
 	// kptfile
-	kf := kptfilelibv1.NewMutator(r.rl.GetObjects()[0].String())
-	var err error
-	if _, err = kf.UnMarshal(); err != nil {
-		fn.Log("error unmarshal kptfile")
+	kf, err := kptfilelibv1.New(r.rl.GetObjects()[0].String())
+	if err != nil {
+		fn.Log("error unmarshal kptfile in initialize")
 		r.rl.AddResult(err, r.rl.GetObjects()[0])
 	}
 
 	// perform a diff
-	diff, err := r.inventory.Diff()
+	diff, err := r.inv.Diff()
 	if err != nil {
 		r.rl.AddResult(err, r.rl.GetObjects()[0])
 	}

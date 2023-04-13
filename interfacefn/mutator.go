@@ -1,13 +1,13 @@
-package mutatorupstream
+package interfacefn
 
 import (
 	"reflect"
 
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
 	clusterctxtlibv1alpha1 "github.com/example.com/foo/pkg/clustercontext/v1alpha1"
-	"github.com/example.com/foo/pkg/fnruntime"
 	interfacelibv1alpha1 "github.com/example.com/foo/pkg/interface/v1alpha1"
 	ipallocv1v1alpha1 "github.com/example.com/foo/pkg/ipallocation/v1alpha1"
+	kptcondsdk "github.com/example.com/foo/pkg/kpt-cond-sdk"
 	nadlibv1 "github.com/example.com/foo/pkg/nad/v1"
 	nadv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	nephioreqv1alpha1 "github.com/nephio-project/api/nf_requirements/v1alpha1"
@@ -18,45 +18,49 @@ import (
 )
 
 type mutatorCtx struct {
-	fnruntime fnruntime.FnRuntime
-	siteCode  *string
+	fnCondSdk       kptcondsdk.KptCondSDK
+	siteCode        string
+	masterInterface string
+	cniType         string
 }
 
 func Run(rl *fn.ResourceList) (bool, error) {
 	m := mutatorCtx{}
-
-	m.fnruntime = fnruntime.NewUpstream(
+	var err error
+	m.fnCondSdk, err = kptcondsdk.New(
 		rl,
-		&fnruntime.UpstreamRuntimeConfig{
-			For: fnruntime.UpstreamRuntimeForConfig{
-				ObjectRef: corev1.ObjectReference{
-					APIVersion: nephioreqv1alpha1.GroupVersion.Identifier(),
-					Kind:       nephioreqv1alpha1.InterfaceKind,
-				},
-				PopulateFn: m.populateInterfaceFn,
+		&kptcondsdk.KptCondSDKConfig{
+			For: corev1.ObjectReference{
+				APIVersion: nephioreqv1alpha1.GroupVersion.Identifier(),
+				Kind:       nephioreqv1alpha1.InterfaceKind,
 			},
-			Owns: map[corev1.ObjectReference]fnruntime.UpstreamRuntimeConfigOperation{
+
+			Owns: map[corev1.ObjectReference]kptcondsdk.OwnKind{
 				{
 					APIVersion: nadv1.SchemeGroupVersion.Identifier(),
 					Kind:       reflect.TypeOf(nadv1.NetworkAttachmentDefinition{}).Name(),
-				}: fnruntime.UpstreamRuntimeConfigOperationConditionOnly,
+				}: kptcondsdk.OwnKindConditionOnly,
 				{
 					APIVersion: ipamv1alpha1.GroupVersion.Identifier(),
 					Kind:       ipamv1alpha1.IPAllocationKind,
-				}: fnruntime.UpstreamRuntimeConfigOperationDefault,
+				}: kptcondsdk.OwnKindConditionAndCreate,
 				// VLAN to be added as the
 				// NF Deployment to be added like the NAD -> this is a global iso per interface
 			},
-			Watch: map[corev1.ObjectReference]fnruntime.WatchCallbackFn{
+			Watch: map[corev1.ObjectReference]kptcondsdk.WatchCallbackFn{
 				{
 					APIVersion: infrav1alpha1.GroupVersion.Identifier(),
 					Kind:       reflect.TypeOf(infrav1alpha1.ClusterContext{}).Name(),
 				}: m.ClusterContextCallbackFn,
 			},
-			ConditionFn: m.populateConditionFn,
+			PopulateOwnResourcesFn: m.populateInterfaceFn,
+			GenerateResourceFn:     nil,
 		},
 	)
-	m.fnruntime.Run()
+	if err != nil {
+		rl.Results = append(rl.Results, fn.ErrorConfigObjectResult(err, nil))
+	}
+	m.fnCondSdk.Run()
 	return true, nil
 }
 
@@ -67,13 +71,11 @@ func (r *mutatorCtx) ClusterContextCallbackFn(o *fn.KubeObject) error {
 		if err != nil {
 			return err
 		}
-		r.siteCode = cluster.Spec.SiteCode
+		r.siteCode = *cluster.Spec.SiteCode
+		r.masterInterface = cluster.Spec.CNIConfig.MasterInterface
+		r.cniType = cluster.Spec.CNIConfig.CNIType
 	}
 	return nil
-}
-
-func (r *mutatorCtx) populateConditionFn() bool {
-	return r.siteCode != nil
 }
 
 func (r *mutatorCtx) populateInterfaceFn(o *fn.KubeObject) (map[corev1.ObjectReference]*fn.KubeObject, error) {
@@ -94,14 +96,14 @@ func (r *mutatorCtx) populateInterfaceFn(o *fn.KubeObject) (map[corev1.ObjectRef
 		ipalloc := ipallocv1v1alpha1.NewGenerator(
 			meta,
 			ipamv1alpha1.IPAllocationSpec{
-				PrefixKind:      ipamv1alpha1.PrefixKindNetwork,
+				PrefixKind: ipamv1alpha1.PrefixKindNetwork,
 				NetworkInstanceRef: &ipamv1alpha1.NetworkInstanceReference{
 					Name: itfce.Spec.NetworkInstance.Name,
 				},
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
 						//ipamv1alpha1.NephioSiteKey: *r.siteCode,
-						"nephio.org/site": *r.siteCode,
+						"nephio.org/site": r.siteCode,
 					},
 				},
 			},
@@ -138,14 +140,14 @@ func (r *mutatorCtx) populateInterfaceFn(o *fn.KubeObject) (map[corev1.ObjectRef
 				Name: o.GetName(),
 			},
 			ipamv1alpha1.IPAllocationSpec{
-				PrefixKind:      ipamv1alpha1.PrefixKindLoopback,
+				PrefixKind: ipamv1alpha1.PrefixKindLoopback,
 				NetworkInstanceRef: &ipamv1alpha1.NetworkInstanceReference{
 					Name: itfce.Spec.NetworkInstance.Name,
 				},
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
 						//ipamv1alpha1.NephioSiteKey: *r.siteCode,
-						"nephio.org/site": *r.siteCode,
+						"nephio.org/site": r.siteCode,
 					},
 				},
 			},
@@ -161,8 +163,10 @@ func (r *mutatorCtx) populateInterfaceFn(o *fn.KubeObject) (map[corev1.ObjectRef
 		}] = newObj
 	}
 
-	if itfce.Spec.AttachmentType == nephioreqv1alpha1.AttachmentTypeVLAN {
-		// vlan allocation
-	}
+	/*
+		if itfce.Spec.AttachmentType == nephioreqv1alpha1.AttachmentTypeVLAN {
+			// vlan allocation
+		}
+	*/
 	return resources, nil
 }

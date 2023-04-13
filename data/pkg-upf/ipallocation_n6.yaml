@@ -3,13 +3,14 @@ kind: IPAllocation
 metadata:
   annotations:
     config.kubernetes.io/local-config: "true"
-    fnruntime.nephio.org/owner: req.nephio.org/v1alpha1.Interface
+    fnruntime.nephio.org/owner: req.nephio.org/v1alpha1.Interface.n6
+    fnruntime.nephio.org/delete: "true"
   creationTimestamp: null
   name: n6
 spec:
   kind: network
-  networkInstance: vpc-internet
+  networkInstanceRef:
+    name: vpc-internet
   selector:
     matchLabels:
       nephio.org/site: edge1
-status: {}
