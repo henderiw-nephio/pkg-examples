@@ -5,13 +5,13 @@ import (
 
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
 	clusterctxtlibv1alpha1 "github.com/example.com/foo/pkg/clustercontext/v1alpha1"
+	interfacelibv1alpha1 "github.com/example.com/foo/pkg/interface/v1alpha1"
 	ipallocv1v1alpha1 "github.com/example.com/foo/pkg/ipallocation/v1alpha1"
 	kptcondsdk "github.com/example.com/foo/pkg/kpt-cond-sdk"
 	nadlibv1 "github.com/example.com/foo/pkg/nad/v1"
 	nadv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	nephioreqv1alpha1 "github.com/nephio-project/api/nf_requirements/v1alpha1"
 	infrav1alpha1 "github.com/nephio-project/nephio-controller-poc/apis/infra/v1alpha1"
-	interfacelibv1alpha1 "github.com/nephio-project/nephio/krm-functions/lib/interface/v1alpha1"
 	ipamv1alpha1 "github.com/nokia/k8s-ipam/apis/ipam/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,6 +34,7 @@ func Run(rl *fn.ResourceList) (bool, error) {
 				APIVersion: nephioreqv1alpha1.GroupVersion.Identifier(),
 				Kind:       nephioreqv1alpha1.InterfaceKind,
 			},
+
 			Owns: map[corev1.ObjectReference]kptcondsdk.ResourceKind{
 				{
 					APIVersion: nadv1.SchemeGroupVersion.Identifier(),
@@ -64,27 +65,30 @@ func Run(rl *fn.ResourceList) (bool, error) {
 }
 
 func (r *mutatorCtx) ClusterContextCallbackFn(o *fn.KubeObject) error {
-	clusterContext := clusterctxtlibv1alpha1.NewMutator(o.String())
-	cluster, err := clusterContext.UnMarshal()
-	if err != nil {
-		return err
+	if o.GetAPIVersion() == infrav1alpha1.SchemeBuilder.GroupVersion.Identifier() && o.GetKind() == reflect.TypeOf(infrav1alpha1.ClusterContext{}).Name() {
+		clusterContext := clusterctxtlibv1alpha1.NewMutator(o.String())
+		cluster, err := clusterContext.UnMarshal()
+		if err != nil {
+			return err
+		}
+		r.siteCode = *cluster.Spec.SiteCode
+		r.masterInterface = cluster.Spec.CNIConfig.MasterInterface
+		r.cniType = cluster.Spec.CNIConfig.CNIType
 	}
-	r.siteCode = *cluster.Spec.SiteCode
-	r.masterInterface = cluster.Spec.CNIConfig.MasterInterface
-	r.cniType = cluster.Spec.CNIConfig.CNIType
 	return nil
 }
 
 func (r *mutatorCtx) populateInterfaceFn(o *fn.KubeObject) (map[corev1.ObjectReference]*fn.KubeObject, error) {
 	resources := map[corev1.ObjectReference]*fn.KubeObject{}
 
-	i, err := interfacelibv1alpha1.NewFromYAML([]byte(o.String()))
+	i := interfacelibv1alpha1.NewMutator(o.String())
+	itfce, err := i.UnMarshal()
 	if err != nil {
 		return nil, err
 	}
 
 	// we assume right now that if the CNITYpe is not set this is a loopback interface
-	if i.GetCNIType() != "" {
+	if itfce.Spec.CNIType != "" {
 		meta := metav1.ObjectMeta{
 			Name: o.GetName(),
 		}
@@ -94,7 +98,7 @@ func (r *mutatorCtx) populateInterfaceFn(o *fn.KubeObject) (map[corev1.ObjectRef
 			ipamv1alpha1.IPAllocationSpec{
 				PrefixKind: ipamv1alpha1.PrefixKindNetwork,
 				NetworkInstanceRef: &ipamv1alpha1.NetworkInstanceReference{
-					Name: i.GetNetworkInstanceName(),
+					Name: itfce.Spec.NetworkInstance.Name,
 				},
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
@@ -138,7 +142,7 @@ func (r *mutatorCtx) populateInterfaceFn(o *fn.KubeObject) (map[corev1.ObjectRef
 			ipamv1alpha1.IPAllocationSpec{
 				PrefixKind: ipamv1alpha1.PrefixKindLoopback,
 				NetworkInstanceRef: &ipamv1alpha1.NetworkInstanceReference{
-					Name: i.GetNetworkInstanceName(),
+					Name: itfce.Spec.NetworkInstance.Name,
 				},
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
