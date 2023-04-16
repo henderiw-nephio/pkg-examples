@@ -29,7 +29,7 @@ func Run(rl *fn.ResourceList) (bool, error) {
 	var err error
 	m.fnCondSdk, err = kptcondsdk.New(
 		rl,
-		&kptcondsdk.KptCondSDKConfig{
+		&kptcondsdk.Config{
 			For: corev1.ObjectReference{
 				APIVersion: nephioreqv1alpha1.GroupVersion.Identifier(),
 				Kind:       nephioreqv1alpha1.InterfaceKind,

@@ -103,7 +103,6 @@ func (r *inventory) diff() (inventoryDiff, error) {
 				// dependening on the outcome update the resource with the new information
 				case resCtx.existingResource != nil && resCtx.newResource != nil:
 					// check diff
-
 					existingSpec, err := getSpec(resCtx.existingResource) 
 					if err != nil {
 						fn.Log("cannot get spec from exisiting obj, err: %v", err)

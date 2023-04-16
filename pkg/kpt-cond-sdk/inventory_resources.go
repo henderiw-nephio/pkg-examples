@@ -57,15 +57,6 @@ type resources struct {
 	resources map[sdkObjectReference]*resources
 }
 
-/*
-type walkAction string
-
-const (
-	walkActionSet    walkAction = "set"
-	walkActionDelete walkAction = "delete"
-)
-*/
-
 func (r *inventory) set(kc *gvkKindCtx, refs []corev1.ObjectReference, x any, new newResource) error {
 	r.m.Lock()
 	defer r.m.Unlock()
@@ -217,7 +208,7 @@ func validateWalk(kc *gvkKindCtx, refs []corev1.ObjectReference) error {
 		if kc.gvkKind == ownGVKKind {
 			return fmt.Errorf("cannot walk resource tree with depth %d other than using for or watch, got: %s", len(refs), kc.gvkKind)
 		}
-		if err := validateRef(refs[0]); err != nil {
+		if err := validateGVKNRef(refs[0]); err != nil {
 			return fmt.Errorf("cannot walk resource tree with depth %d, nil reference, got: %v", len(refs), refs)
 		}
 		return nil
@@ -225,7 +216,7 @@ func validateWalk(kc *gvkKindCtx, refs []corev1.ObjectReference) error {
 		if kc.gvkKind == forGVKKind {
 			return fmt.Errorf("cannot walk resource tree with depth %d other than own or watch, got: %s", len(refs), kc.gvkKind)
 		}
-		if validateRef(refs[0]) != nil && validateRef(refs[1]) != nil {
+		if validateGVKNRef(refs[0]) != nil && validateGVKNRef(refs[1]) != nil {
 			return fmt.Errorf("cannot walk resource tree with depth %d, nil reference, got: %v", len(refs), refs)
 		}
 		return nil
@@ -234,9 +225,4 @@ func validateWalk(kc *gvkKindCtx, refs []corev1.ObjectReference) error {
 	}
 }
 
-func validateRef(ref corev1.ObjectReference) error {
-	if ref.APIVersion == "" || ref.Kind == "" || ref.Name == "" {
-		return fmt.Errorf("cannot insert when objref has empty GVKNB, got: %v", ref)
-	}
-	return nil
-}
+

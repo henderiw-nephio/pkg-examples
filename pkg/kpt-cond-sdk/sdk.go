@@ -41,7 +41,7 @@ const (
 	ResourceKindFull ResourceKind = "full"
 )
 
-type KptCondSDKConfig struct {
+type Config struct {
 	For                    corev1.ObjectReference
 	Owns                   map[corev1.ObjectReference]ResourceKind    // ResourceKind distinguishes ResourceKindNone and ResourceKindFull
 	Watch                  map[corev1.ObjectReference]WatchCallbackFn // Used for watches to non specific resources
@@ -55,7 +55,7 @@ type PopulateOwnResourcesFn func(*fn.KubeObject) (map[corev1.ObjectReference]*fn
 type GenerateResourceFn func([]*fn.KubeObject) (*fn.KubeObject, error)
 type WatchCallbackFn func(*fn.KubeObject) error
 
-func New(rl *fn.ResourceList, cfg *KptCondSDKConfig) (KptCondSDK, error) {
+func New(rl *fn.ResourceList, cfg *Config) (KptCondSDK, error) {
 	inv, err := newInventory(cfg)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func New(rl *fn.ResourceList, cfg *KptCondSDKConfig) (KptCondSDK, error) {
 }
 
 type sdk struct {
-	cfg  *KptCondSDKConfig
+	cfg  *Config
 	inv  Inventory
 	rl   *kptrl.ResourceList
 	kptf kptfilelibv1.KptFile
@@ -90,9 +90,11 @@ func (r *sdk) Run() {
 		return
 	}
 
+	// stage 1 of the sdk pipeline
 	r.populateInventory()
 	r.populateChildren()
 	r.updateChildren()
+	// stage 2 of the sdk pipeline
 	r.generateResource()
 
 }
@@ -108,7 +110,9 @@ func (r *sdk) populateInventory() {
 	// forInventory context. If no match was found to the forOwnerRef the watchedResource is associated
 	// to the global context
 	var forOwnerRef *corev1.ObjectReference
-	// we assume the kpt file is always resource idx 0 in the resourcelist
+	// we assume the kpt file is always resource idx 0 in the resourcelist, the object is used
+	// as a reference to errors when we encounter issues with the condition processing
+	// since conditions are stored in the kptFile
 	o := r.rl.GetObjects()[0]
 
 	// We first run through the conditions to check if an ownRef is associated
@@ -117,130 +121,85 @@ func (r *sdk) populateInventory() {
 	// inventory specific to the for resource or globally.
 	for _, c := range r.kptf.GetConditions() {
 		// get the specific inventory context from the conditionType
-		condRef := kptfilelibv1.GetGVKNFromConditionType(c.Type)
+		ref := kptfilelibv1.GetGVKNFromConditionType(c.Type)
 		// check if the conditionType is coming from a for KRM resource
-		kindCtx, ok := r.inv.isGVKMatch(condRef)
+		kindCtx, ok := r.inv.isGVKMatch(ref)
 		if ok && kindCtx.gvkKind == forGVKKind {
 			// get the ownerRef from the consitionReason
 			// to see if the forOwnerref is present and if so initialize the forOwnerRef using the GVK
 			// information
 			ownerRef := kptfilelibv1.GetGVKNFromConditionType(c.Reason)
-			if ownerRef.Kind != "" {
+			if err := validateGVKRef(*ownerRef); err == nil {
 				forOwnerRef = &corev1.ObjectReference{APIVersion: ownerRef.APIVersion, Kind: ownerRef.Kind}
-			}
-			// add the for resource to the inventory
-			if err := r.inv.set(kindCtx, []corev1.ObjectReference{*condRef}, &c, false); err != nil {
-				fn.Logf("error setting exisiting condition to the inventory: %v\n", err.Error())
-				r.rl.AddResult(err, o)
 			}
 		}
 	}
-
 	// Now we have the forOwnerRef we run through the condition again to populate the remaining
 	// resources in the inventory
 	for _, c := range r.kptf.GetConditions() {
-		condRef := kptfilelibv1.GetGVKNFromConditionType(c.Type)
-		kindCtx, ok := r.inv.isGVKMatch(condRef)
-		if !ok {
-			continue
-		}
-		switch kindCtx.gvkKind {
-		case ownGVKKind:
-			// for owns it is possible that another fn/controller
-			// owns this resource. we can check this by looking at the ownerRef
-			// in the condition reason and check if this matches the forKind
-			ownerRef := kptfilelibv1.GetGVKNFromConditionType(c.Reason)
-			ownerKindCtx, ok := r.inv.isGVKMatch(ownerRef)
-			if !ok || ownerKindCtx.gvkKind != forGVKKind {
-				// this means the resource was added from a different kind so we dont need to add this
-				continue
-			}
-			forRef := *ownerRef
-			ownRef := *condRef
-			//r.inv.setExistingCondition(kindCtx, ownerRef, condRef, &c)
-			if err := r.inv.set(kindCtx, []corev1.ObjectReference{forRef, ownRef}, &c, false); err != nil {
-				fn.Logf("error setting exisiting condition to the inventory: %v\n", err.Error())
-				r.rl.AddResult(err, o)
-			}
-		case watchGVKKind:
-			ownerRef := kptfilelibv1.GetGVKNFromConditionType(c.Reason)
-			if forOwnerRef != nil && (ownerRef.APIVersion == forOwnerRef.APIVersion && ownerRef.Kind == forOwnerRef.Kind ||
-				condRef.APIVersion == forOwnerRef.APIVersion && condRef.Kind == forOwnerRef.Kind) {
-				// specific watch
-				forRef := corev1.ObjectReference{APIVersion: r.cfg.For.APIVersion, Kind: r.cfg.For.Kind, Name: condRef.Name}
-				watchRef := *condRef
-				if err := r.inv.set(kindCtx, []corev1.ObjectReference{forRef, watchRef}, &c, false); err != nil {
-					fn.Logf("error setting exisiting condition to the inventory: %v\n", err.Error())
-					r.rl.AddResult(err, o)
-				}
-			} else {
-				// global watch
-				watchRef := *condRef
-				if err := r.inv.set(kindCtx, []corev1.ObjectReference{watchRef}, &c, false); err != nil {
-					fn.Logf("error setting exisiting condition to the inventory: %v\n", err.Error())
-					r.rl.AddResult(err, o)
-				}
-			}
-		}
+		ref := kptfilelibv1.GetGVKNFromConditionType(c.Type)
+		ownerRef := kptfilelibv1.GetGVKNFromConditionType(c.Reason)
+		r.populate(forOwnerRef, ref, ownerRef, c, o)
 	}
-
 	for _, o := range r.rl.GetObjects() {
-		// check if this resource matches our filters
-		kindCtx, ok := r.inv.isGVKMatch(&corev1.ObjectReference{
+		ref := &corev1.ObjectReference{
 			APIVersion: o.GetAPIVersion(),
 			Kind:       o.GetKind(),
-		})
-		if !ok {
-			continue
+			Name:       o.GetName(),
 		}
-		switch kindCtx.gvkKind {
-		case forGVKKind:
-			forRef := corev1.ObjectReference{APIVersion: o.GetAPIVersion(), Kind: o.GetKind(), Name: o.GetName()}
-			fn.Log("set existing for resource in inventory", &forRef, o)
-			if err := r.inv.set(kindCtx, []corev1.ObjectReference{forRef}, o, false); err != nil {
+		ownerRef := kptfilelibv1.GetGVKNFromConditionType(o.GetAnnotation(FnRuntimeOwner))
+		r.populate(forOwnerRef, ref, ownerRef, o, o)
+	}
+
+}
+
+func (r *sdk) populate(forOwnerRef, ref, ownerRef *corev1.ObjectReference, x any, o *fn.KubeObject) {
+	// we lookup in the GVK context we initialized in the beginning to validate
+	// if the gvk is relevant for this fn/controller
+	// what the gvk Kind is about through the kindContext
+	gvkKindCtx, ok := r.inv.isGVKMatch(getGVKRefFromGVKNref(ref))
+	if !ok {
+		// it can be that a resource in the kpt package is not relevant for this fn/controller
+		// As such we return
+		return
+	}
+	fn.Logf("set existing object in inventory, kind %s, ref: %v ownerRef: %v\n", gvkKindCtx.gvkKind, ref, ownerRef)
+	switch gvkKindCtx.gvkKind {
+	case forGVKKind:
+		if err := r.inv.set(gvkKindCtx, []corev1.ObjectReference{*ref}, x, false); err != nil {
+			fn.Logf("error setting exisiting object in the inventory: %v\n", err.Error())
+			r.rl.AddResult(err, o)
+		}
+	case ownGVKKind:
+		ownerKindCtx, ok := r.inv.isGVKMatch(ownerRef)
+		if !ok || ownerKindCtx.gvkKind != forGVKKind {
+			// this means the resource was added from a different kind
+			// we dont need to add this to the inventory
+			return
+		}
+		if err := r.inv.set(gvkKindCtx, []corev1.ObjectReference{*ownerRef, *ref}, x, false); err != nil {
+			fn.Logf("error setting exisiting resource to the inventory: %v\n", err.Error())
+			r.rl.AddResult(err, o)
+		}
+	case watchGVKKind:
+		// check if the watch is specific or global
+		// if no forOwnerRef is set the watch is global
+		// if a forOwnerref is set we check if either the ownerRef or ref is match the GVK
+		// the specifics of the name is sorted out later
+		if forOwnerRef != nil && (ownerRef.APIVersion == forOwnerRef.APIVersion && ownerRef.Kind == forOwnerRef.Kind ||
+			ref.APIVersion == forOwnerRef.APIVersion && ref.Kind == forOwnerRef.Kind) {
+			// this is a specific watch
+			forRef := &corev1.ObjectReference{APIVersion: r.cfg.For.APIVersion, Kind: r.cfg.For.Kind, Name: ref.Name}
+
+			if err := r.inv.set(gvkKindCtx, []corev1.ObjectReference{*forRef, *ref}, x, false); err != nil {
 				fn.Logf("error setting exisiting resource to the inventory: %v\n", err.Error())
 				r.rl.AddResult(err, o)
 			}
-
-		case ownGVKKind:
-			// for owns it is possible that another fn/controller
-			// owns this resource. we can check this by looking at the ownerRef
-			// in the condition reason and check if this matches the forKind
-			ownerRef := kptfilelibv1.GetGVKNFromConditionType(o.GetAnnotation(FnRuntimeOwner))
-			ownerKindCtx, ok := r.inv.isGVKMatch(ownerRef)
-			if !ok || ownerKindCtx.gvkKind != forGVKKind {
-				// this means the resource was added from a different kind so we dont need to add this
-				continue
-			}
-			forRef := ownerRef
-			ownRef := corev1.ObjectReference{APIVersion: o.GetAPIVersion(), Kind: o.GetKind(), Name: o.GetName()}
-			fn.Logf("set existing own resource in inventory: forRef: %v, ownRef: %v", forRef, ownRef)
-			if err := r.inv.set(kindCtx, []corev1.ObjectReference{*ownerRef, ownRef}, o, false); err != nil {
+		} else {
+			// this is a global watch
+			if err := r.inv.set(gvkKindCtx, []corev1.ObjectReference{*ref}, x, false); err != nil {
 				fn.Logf("error setting exisiting resource to the inventory: %v\n", err.Error())
 				r.rl.AddResult(err, o)
-			}
-		case watchGVKKind:
-			ownerRef := kptfilelibv1.GetGVKNFromConditionType(o.GetAnnotation(FnRuntimeOwner))
-			if forOwnerRef != nil && (ownerRef.APIVersion == forOwnerRef.APIVersion && ownerRef.Kind == forOwnerRef.Kind ||
-				o.GetAPIVersion() == forOwnerRef.APIVersion && o.GetKind() == forOwnerRef.Kind) {
-				// this is a specific watch
-
-				forRef := corev1.ObjectReference{APIVersion: r.cfg.For.APIVersion, Kind: r.cfg.For.Kind, Name: o.GetName()}
-				watchRef := corev1.ObjectReference{APIVersion: o.GetAPIVersion(), Kind: o.GetKind(), Name: o.GetName()}
-
-				if err := r.inv.set(kindCtx, []corev1.ObjectReference{forRef, watchRef}, o, false); err != nil {
-					fn.Logf("error setting exisiting resource to the inventory: %v\n", err.Error())
-					r.rl.AddResult(err, o)
-				}
-			} else {
-				// this is a global watch ref
-				watchRef := corev1.ObjectReference{APIVersion: o.GetAPIVersion(), Kind: o.GetKind(), Name: o.GetName()}
-				fn.Logf("set existing watch resource in inventory: forRef: %v, ownRef: %v", watchRef)
-
-				if err := r.inv.set(kindCtx, []corev1.ObjectReference{watchRef}, o, false); err != nil {
-					fn.Logf("error setting exisiting resource to the inventory: %v\n", err.Error())
-					r.rl.AddResult(err, o)
-				}
 			}
 		}
 	}
@@ -397,16 +356,6 @@ func (r *sdk) setObjectInResourceList(obj *object) {
 	r.inv.set(&gvkKindCtx{gvkKind: ownGVKKind}, []corev1.ObjectReference{obj.forRef, obj.ref}, &obj.obj, false)
 }
 
-/*
-type updateAction string
-
-const (
-	deleteUpdateAction updateAction = "delete"
-	createUpdateAction updateAction = "create"
-	updateUpdateAction updateAction = "update"
-)
-*/
-
 // updateResource updates the resource and when complete sets the condition
 // to true
 func (r *sdk) generateResource() {
@@ -421,7 +370,7 @@ func (r *sdk) generateResource() {
 	if !r.inv.isReady() {
 		// when the overal status is not ready delete all resources
 		// TBD if we need to check the delete annotation
-		readyMap := r.inv.getResourceReadyMap()
+		readyMap := r.inv.getReadyMap()
 		for _, readyCtx := range readyMap {
 			if readyCtx.ForObj != nil {
 				if len(r.cfg.Owns) == 0 {
@@ -444,7 +393,7 @@ func (r *sdk) generateResource() {
 		}
 	}
 	// the overall status is ready, so lets check the readiness map
-	readyMap := r.inv.getResourceReadyMap()
+	readyMap := r.inv.getReadyMap()
 	for forRef, readyCtx := range readyMap {
 		// if the for is not ready delete the object
 		if !readyCtx.Ready {

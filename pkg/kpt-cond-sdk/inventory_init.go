@@ -26,7 +26,7 @@ import (
 // resources as specified in the SDKConfig
 // used to provide faster loopup if the GVK is relevant for the fn/controller
 // and to provide context if there is a match
-func (r *inventory) initializeGVKInventory(cfg *KptCondSDKConfig) error {
+func (r *inventory) initializeGVKInventory(cfg *Config) error {
 	if err := r.addGVKObjectReference(&gvkKindCtx{gvkKind: forGVKKind}, cfg.For); err != nil {
 		return err
 	}

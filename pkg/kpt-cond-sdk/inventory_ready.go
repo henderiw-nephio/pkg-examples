@@ -29,6 +29,10 @@ type readyCtx struct {
 	Watches map[corev1.ObjectReference]fn.KubeObject
 }
 
+// isReady provide the overall ready status by validating the global
+// watch resource. Used in stage1 and stage2
+// if the global watched resource(s) dont exist we are not ready
+// if the global watched resource(s) have a False condition status we are not ready
 func (r *inventory) isReady() bool {
 	r.m.RLock()
 	defer r.m.RUnlock()
@@ -37,7 +41,6 @@ func (r *inventory) isReady() bool {
 	if !r.hasOwn {
 		return false
 	}
-
 	// check readiness, we start positive
 	ready := true
 	// the readiness is determined by the global watch resources
@@ -55,7 +58,12 @@ func (r *inventory) isReady() bool {
 	return ready
 }
 
-func (r *inventory) getResourceReadyMap() map[corev1.ObjectReference]*readyCtx {
+// getResourceReadyMap provides a readyMap based on the information of the children
+// of the forResource
+// Both own and watches that are dependent on the forResource are validated for
+// readiness
+// The readyMap is used only in stage 2 of the sdk
+func (r *inventory) getReadyMap() map[corev1.ObjectReference]*readyCtx {
 	r.m.RLock()
 	defer r.m.RUnlock()
 

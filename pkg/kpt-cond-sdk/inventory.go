@@ -27,7 +27,7 @@ type Inventory interface {
 	// resources as specified in the SDKConfig
 	// used to provide faster loopup if the GVK is relevant for the fn/controller
 	// and to provide context if there is a match
-	initializeGVKInventory(cfg *KptCondSDKConfig) error
+	initializeGVKInventory(cfg *Config) error
 	addGVKObjectReference(kc *gvkKindCtx, ref corev1.ObjectReference) error
 	isGVKMatch(ref *corev1.ObjectReference) (*gvkKindCtx, bool)
 	// runtime crud operations on the inventory
@@ -37,11 +37,11 @@ type Inventory interface {
 	list() [][]sdkObjectReference
 
 	isReady() bool
-	getResourceReadyMap() map[corev1.ObjectReference]*readyCtx
+	getReadyMap() map[corev1.ObjectReference]*readyCtx
 	diff() (inventoryDiff, error)
 }
 
-func newInventory(cfg *KptCondSDKConfig) (Inventory, error) {
+func newInventory(cfg *Config) (Inventory, error) {
 	r := &inventory{
 		gvkResources: map[corev1.ObjectReference]*gvkKindCtx{},
 		resources: &resources{

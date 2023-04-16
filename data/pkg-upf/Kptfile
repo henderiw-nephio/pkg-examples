@@ -14,12 +14,12 @@ status:
   - message: create resource
     reason: req.nephio.org/v1alpha1.Interface.n6
     status: "False"
-    type: ipam.nephio.org/v1alpha1.IPAllocation.n6
-  - message: create resource
+    type: k8s.cni.cncf.io/v1.NetworkAttachmentDefinition.n6
+  - message: create condition again as it was deleted
     reason: req.nephio.org/v1alpha1.Interface.n6
     status: "False"
-    type: k8s.cni.cncf.io/v1.NetworkAttachmentDefinition.n6
-  - message: create resource
+    type: ipam.nephio.org/v1alpha1.IPAllocation.n6
+  - message: create condition again as it was deleted
     reason: req.nephio.org/v1alpha1.Interface.n3
     status: "False"
     type: ipam.nephio.org/v1alpha1.IPAllocation.n3
