@@ -1,16 +1,17 @@
-apiVersion: ipam.nephio.org/v1alpha1
+apiVersion: ipam.alloc.nephio.org/v1alpha1
 kind: IPAllocation
 metadata:
-  annotations:
-    config.kubernetes.io/local-config: "true"
-    fnruntime.nephio.org/owner: req.nephio.org/v1alpha1.Interface.n3
   creationTimestamp: null
   name: n3
+  annotations:
+    fnruntime.nephio.org/owner: req.nephio.org/v1alpha1.Interface.n3
 spec:
   kind: network
-  networkInstanceRef:
+  networkInstance:
     name: vpc-ran
   selector:
     matchLabels:
       nephio.org/site: edge1
-status: {}
+status:
+  prefix: 10.0.0.3/24
+  gateway: 10.0.0.1

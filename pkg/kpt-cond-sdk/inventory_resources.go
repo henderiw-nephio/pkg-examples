@@ -118,7 +118,27 @@ func (r *resources) get(k gvkKind, ref *corev1.ObjectReference, resCtxs map[core
 	for sdkref, res := range r.resources {
 		fn.Log("get sdkref", sdkref)
 		if sdkref.gvkKind == k {
-			resCtxs[sdkref.ref] = &res.resourceCtx
+			var ec *kptv1.Condition
+			var eo, no *fn.KubeObject
+			if res.existingCondition != nil {
+				x := *res.existingCondition
+				ec = &x
+			}
+			if res.existingResource != nil {
+				x := *res.existingResource
+				eo = &x
+			}
+			if res.newResource != nil {
+				x := *res.newResource
+				no = &x
+			}
+
+			resCtxs[sdkref.ref] = &resourceCtx{
+				gvkKindCtx:        res.gvkKindCtx,
+				existingCondition: ec,
+				existingResource:  eo,
+				newResource:       no,
+			}
 		}
 	}
 	return resCtxs
@@ -167,13 +187,17 @@ func (r *resources) walk(a action, kc *gvkKindCtx, refs []corev1.ObjectReference
 		}
 		switch d := x.(type) {
 		case *kptv1.Condition:
-			r.resources[sdkRef].resourceCtx.existingCondition = d
+			fn.Logf("add existing condition: %v\n", sdkRef)
+			x := *d
+			r.resources[sdkRef].resourceCtx.existingCondition = &x
 		case *fn.KubeObject:
 			r.resources[sdkRef].gvkKindCtx = *kc
 			if new {
-				r.resources[sdkRef].resourceCtx.newResource = d
+				x := *d
+				r.resources[sdkRef].resourceCtx.newResource = &x
 			} else {
-				r.resources[sdkRef].resourceCtx.existingResource = d
+				x := *d
+				r.resources[sdkRef].resourceCtx.existingResource = &x
 			}
 		default:
 			return fmt.Errorf("cannot insert unsupported object: %v", x)
@@ -224,5 +248,3 @@ func validateWalk(kc *gvkKindCtx, refs []corev1.ObjectReference) error {
 		return fmt.Errorf("cannot walk resource tree with depth > 2, got %d", len(refs))
 	}
 }
-
-

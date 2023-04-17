@@ -38,7 +38,7 @@ type Inventory interface {
 
 	isReady() bool
 	getReadyMap() map[corev1.ObjectReference]*readyCtx
-	diff() (inventoryDiff, error)
+	diff() (map[corev1.ObjectReference]*inventoryDiff, error)
 }
 
 func newInventory(cfg *Config) (Inventory, error) {
@@ -56,7 +56,7 @@ func newInventory(cfg *Config) (Inventory, error) {
 
 type inventory struct {
 	m      sync.RWMutex
-	hasOwn bool
+	//hasOwn bool
 	// gvkResource contain the gvk based resource from config
 	// they dont contain the names but allow for faster lookups
 	// when walking the resource list or condition list

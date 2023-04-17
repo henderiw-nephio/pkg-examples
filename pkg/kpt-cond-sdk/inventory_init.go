@@ -31,7 +31,6 @@ func (r *inventory) initializeGVKInventory(cfg *Config) error {
 		return err
 	}
 	for ref, ok := range cfg.Owns {
-		r.hasOwn = true
 		if err := r.addGVKObjectReference(&gvkKindCtx{gvkKind: ownGVKKind, ownKind: ok}, ref); err != nil {
 			return err
 		}

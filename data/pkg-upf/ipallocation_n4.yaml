@@ -1,14 +1,13 @@
-apiVersion: ipam.nephio.org/v1alpha1
+apiVersion: ipam.alloc.nephio.org/v1alpha1
 kind: IPAllocation
 metadata:
-  annotations:
-    config.kubernetes.io/local-config: "true"
-    fnruntime.nephio.org/owner: req.nephio.org/v1alpha1.Interface.n4
   creationTimestamp: null
   name: n4
+  annotations:
+    fnruntime.nephio.org/owner: req.nephio.org/v1alpha1.Interface.n4
 spec:
   kind: network
-  networkInstanceRef:
+  networkInstance:
     name: vpc-internal
   selector:
     matchLabels:

@@ -23,10 +23,10 @@ import (
 )
 
 type readyCtx struct {
-	Ready   bool
-	ForObj  *fn.KubeObject
-	Owns    map[corev1.ObjectReference]fn.KubeObject
-	Watches map[corev1.ObjectReference]fn.KubeObject
+	ready   bool
+	forObj  *fn.KubeObject
+	owns    map[corev1.ObjectReference]fn.KubeObject
+	watches map[corev1.ObjectReference]fn.KubeObject
 }
 
 // isReady provide the overall ready status by validating the global
@@ -36,16 +36,12 @@ type readyCtx struct {
 func (r *inventory) isReady() bool {
 	r.m.RLock()
 	defer r.m.RUnlock()
-	// if no owners are needed there is no need to generate children
-	// we return as not ready
-	if !r.hasOwn {
-		return false
-	}
 	// check readiness, we start positive
 	ready := true
 	// the readiness is determined by the global watch resources
-	for _, resCtx := range r.get(watchGVKKind, nil) {
-		// if watched resource does not exist we fail readiness
+	for watchRef, resCtx := range r.get(watchGVKKind, nil) {
+		fn.Logf("isReady: watchRef: %v, resCtx: %v\n", watchRef, resCtx)
+		// if global watched resource does not exist we fail readiness
 		// if the condition is present and the status is False something is pending, so we
 		// fail readiness
 		if resCtx.existingResource == nil ||
@@ -58,7 +54,7 @@ func (r *inventory) isReady() bool {
 	return ready
 }
 
-// getResourceReadyMap provides a readyMap based on the information of the children
+// getReadyMap provides a readyMap based on the information of the children
 // of the forResource
 // Both own and watches that are dependent on the forResource are validated for
 // readiness
@@ -70,30 +66,31 @@ func (r *inventory) getReadyMap() map[corev1.ObjectReference]*readyCtx {
 	readyMap := map[corev1.ObjectReference]*readyCtx{}
 	for forRef, resCtx := range r.get(forGVKKind, nil) {
 		readyMap[forRef] = &readyCtx{
-			Ready:   true,
-			Owns:    map[corev1.ObjectReference]fn.KubeObject{},
-			Watches: map[corev1.ObjectReference]fn.KubeObject{},
-			ForObj:  resCtx.existingResource,
+			ready:   true,
+			owns:    map[corev1.ObjectReference]fn.KubeObject{},
+			watches: map[corev1.ObjectReference]fn.KubeObject{},
+			forObj:  resCtx.existingResource,
 		}
 		for ref, resCtx := range r.get(ownGVKKind, &forRef) {
 			if resCtx.existingCondition == nil ||
 				resCtx.existingCondition.Status == kptv1.ConditionStatus(corev1.ConditionFalse) {
-				readyMap[forRef].Ready = false
+				readyMap[forRef].ready = false
 			}
 			if resCtx.existingResource != nil {
-				readyMap[forRef].Owns[ref] = *resCtx.existingResource
+				readyMap[forRef].owns[ref] = *resCtx.existingResource
 			}
 		}
 		for ref, resCtx := range r.get(watchGVKKind, &forRef) {
-			// TODO we need to look at some watches that we want to check the condition for and others not
+			// TBD we need to look at some watches that we want to check the condition for and others not
+			fn.Logf("getReadyMap: ref: %v, resCtx condition %v\n", ref, resCtx.existingCondition)
 			if resCtx.existingCondition == nil || resCtx.existingCondition.Status == kptv1.ConditionStatus(corev1.ConditionFalse) {
-				readyMap[forRef].Ready = false
+				readyMap[forRef].ready = false
 			}
-			if _, ok := readyMap[forRef].Watches[ref]; !ok {
-				readyMap[forRef].Watches[ref] = *resCtx.existingResource
+			if _, ok := readyMap[forRef].watches[ref]; !ok {
+				readyMap[forRef].watches[ref] = *resCtx.existingResource
 			}
 			if resCtx.existingResource != nil {
-				readyMap[forRef].Watches[ref] = *resCtx.existingResource
+				readyMap[forRef].watches[ref] = *resCtx.existingResource
 			}
 		}
 	}
