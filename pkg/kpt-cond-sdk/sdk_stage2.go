@@ -25,11 +25,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// updateResource updates the resource and when complete sets the condition
-// to true
+// generateResource updates or generates the resource when the status is declared ready
+// First readiness is validated in 2 steps:
+// - global readiness: when key resources are missing
+// - per instance readiness: when certain parts of an instance readiness is missing
 func (r *sdk) generateResource() {
 	fn.Logf("generateResource isReady: %t\n", r.inv.isReady())
-
 	if !r.inv.isReady() {
 		// when the overal status is not ready delete all resources
 		// TBD if we need to check the delete annotation
@@ -43,7 +44,6 @@ func (r *sdk) generateResource() {
 		}
 		return
 	}
-
 	// the overall status is ready, so lets check the readiness map
 	readyMap := r.inv.getReadyMap()
 	if len(readyMap) == 0 {
@@ -62,7 +62,6 @@ func (r *sdk) generateResource() {
 			}
 			continue
 		}
-
 		if r.cfg.GenerateResourceFn != nil {
 			objs := []*fn.KubeObject{}
 			for _, o := range readyCtx.owns {
@@ -74,7 +73,7 @@ func (r *sdk) generateResource() {
 			r.handleGenerateUpdate(forRef, readyCtx.forObj, objs)
 		}
 	}
-	// update the kptfile with the latest consitions
+	// update the kptfile with the latest conditions
 	kptfile, err := r.kptf.ParseKubeObject()
 	if err != nil {
 		fn.Log(err)
@@ -83,6 +82,8 @@ func (r *sdk) generateResource() {
 	r.rl.SetObject(kptfile)
 }
 
+// handleGenerateUpdate performs the fn/controller callback and handles the response
+// by updating the condition and resource in kptfile/resourcelist
 func (r *sdk) handleGenerateUpdate(forRef corev1.ObjectReference, forObj *fn.KubeObject, objs []*fn.KubeObject) {
 	newObj, err := r.cfg.GenerateResourceFn(forObj, objs)
 	if err != nil {
@@ -92,7 +93,6 @@ func (r *sdk) handleGenerateUpdate(forRef corev1.ObjectReference, forObj *fn.Kub
 		} else {
 			r.rl.AddResult(err, r.rl.GetObjects()[0])
 		}
-
 		return
 	}
 	if newObj == nil {
@@ -110,6 +110,5 @@ func (r *sdk) handleGenerateUpdate(forRef corev1.ObjectReference, forObj *fn.Kub
 		newObj.SetAnnotation(FnRuntimeOwner, kptfilelibv1.GetConditionType(&forRef))
 	}
 	// add the resource to the kptfile and updates the resource in the resourcelist
-	r.handleUpdate(actionUpdate, forGVKKind, &forRef, nil, &object{obj: *newObj}, kptv1.ConditionTrue, "done", true)
-
+	r.handleUpdate(actionUpdate, forGVKKind, []*corev1.ObjectReference{&forRef}, &object{obj: *newObj}, kptv1.ConditionTrue, "done", true)
 }

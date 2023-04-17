@@ -17,8 +17,6 @@ limitations under the License.
 package kptcondsdk
 
 import (
-	"fmt"
-
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
 	kptv1 "github.com/GoogleContainerTools/kpt/pkg/api/kptfile/v1"
 	kptfilelibv1 "github.com/nephio-project/nephio/krm-functions/lib/kptfile/v1"
@@ -75,12 +73,12 @@ func (r *sdk) updateChildren() {
 			// delete the overall condition for the object
 			if diff.deleteForCondition {
 				fn.Logf("diff action -> delete for condition: %s\n", kptfilelibv1.GetConditionType(&forRef))
-				r.deleteConditionInKptFile(ownGVKKind, &forRef, nil)
+				r.deleteConditionInKptFile(ownGVKKind, []*corev1.ObjectReference{&forRef})
 			}
 			// delete all child resources by setting the annotation and set the condition to false
 			for _, obj := range diff.deleteObjs {
 				fn.Logf("diff action ->  delete set condition: %s\n", kptfilelibv1.GetConditionType(&obj.ref))
-				r.handleUpdate(actionDelete, ownGVKKind, &forRef, &obj.ref, obj, kptv1.ConditionFalse, "not ready", true)
+				r.handleUpdate(actionDelete, ownGVKKind, []*corev1.ObjectReference{&forRef, &obj.ref}, obj, kptv1.ConditionFalse, "not ready", true)
 			}
 		}
 	} else {
@@ -89,35 +87,35 @@ func (r *sdk) updateChildren() {
 			// update conditions
 			if diff.updateForCondition {
 				fn.Logf("diff action ->  update for condition: %s\n", kptfilelibv1.GetConditionType(&forRef))
-				r.setConditionInKptFile(actionUpdate, ownGVKKind, &forRef, nil, kptv1.ConditionFalse, "for condition")
+				r.setConditionInKptFile(actionUpdate, ownGVKKind, []*corev1.ObjectReference{&forRef}, kptv1.ConditionFalse, "for condition")
 			}
 			for _, obj := range diff.createConditions {
 				fn.Logf("diff action ->  create condition: %s\n", kptfilelibv1.GetConditionType(&obj.ref))
-				r.setConditionInKptFile(actionUpdate, ownGVKKind, &forRef, &obj.ref, kptv1.ConditionFalse, "condition again as it was deleted")
+				r.setConditionInKptFile(actionUpdate, ownGVKKind, []*corev1.ObjectReference{&forRef, &obj.ref}, kptv1.ConditionFalse, "condition again as it was deleted")
 			}
 			for _, obj := range diff.deleteConditions {
 				fn.Logf("diff action ->  delete condition: %s\n", kptfilelibv1.GetConditionType(&obj.ref))
-				r.deleteConditionInKptFile(ownGVKKind, &forRef, &obj.ref)
+				r.deleteConditionInKptFile(ownGVKKind, []*corev1.ObjectReference{&forRef, &obj.ref})
 			}
 			// update resources
 			for _, obj := range diff.createObjs {
 				fn.Logf("diff action -> create obj: ref: %s, ownkind: %s\n", kptfilelibv1.GetConditionType(&obj.ref), obj.ownKind)
-				r.handleUpdate(actionCreate, ownGVKKind, &forRef, &obj.ref, obj, kptv1.ConditionFalse, "resource", false)
+				r.handleUpdate(actionCreate, ownGVKKind, []*corev1.ObjectReference{&forRef, &obj.ref}, obj, kptv1.ConditionFalse, "resource", false)
 			}
 			for _, obj := range diff.updateObjs {
 				fn.Logf("diff action -> update obj: %s\n", kptfilelibv1.GetConditionType(&obj.ref))
-				r.handleUpdate(actionUpdate, ownGVKKind, &forRef, &obj.ref, obj, kptv1.ConditionFalse, "resource", false)
+				r.handleUpdate(actionUpdate, ownGVKKind, []*corev1.ObjectReference{&forRef, &obj.ref}, obj, kptv1.ConditionFalse, "resource", false)
 			}
 			for _, obj := range diff.deleteObjs {
 				fn.Logf("diff action -> delete obj: %s\n", kptfilelibv1.GetConditionType(&obj.ref))
-				r.handleUpdate(actionDelete, ownGVKKind, &forRef, &obj.ref, obj, kptv1.ConditionFalse, "resource", true)
+				r.handleUpdate(actionDelete, ownGVKKind,[]*corev1.ObjectReference{&forRef, &obj.ref}, obj, kptv1.ConditionFalse, "resource", true)
 			}
 			// this is a corner case, in case for object gets deleted and recreated
 			// if the delete annotation is set, we need to cleanup the
 			// delete annotation and set the condition to update
 			for _, obj := range diff.updateDeleteAnnotations {
 				fn.Log("diff action -> update delete annotation")
-				r.handleUpdate(actionCreate, ownGVKKind, &forRef, &obj.ref, obj, kptv1.ConditionFalse, "resource", true)
+				r.handleUpdate(actionCreate, ownGVKKind, []*corev1.ObjectReference{&forRef, &obj.ref}, obj, kptv1.ConditionFalse, "resource", true)
 			}
 		}
 	}
@@ -128,79 +126,4 @@ func (r *sdk) updateChildren() {
 		r.rl.AddResult(err, r.rl.GetObjects()[0])
 	}
 	r.rl.SetObject(kptfile)
-}
-
-// handleUpdate sets the condition and resource based on the action
-func (r *sdk) handleUpdate(a action, kind gvkKind, forRef, objRef *corev1.ObjectReference, obj *object, status kptv1.ConditionStatus, msg string, ignoreOwnKind bool) {
-	// set the condition
-	r.setConditionInKptFile(a, kind, forRef, objRef, status, msg)
-	// update resource
-	if a == actionDelete {
-		obj.obj.SetAnnotation(FnRuntimeDelete, "true")
-	}
-	// set resource
-	if ignoreOwnKind {
-		r.setObjectInResourceList(kind, forRef, objRef, obj)
-	} else {
-		if obj.ownKind == ResourceKindFull {
-			r.setObjectInResourceList(kind, forRef, objRef, obj)
-		}
-	}
-}
-
-func (r *sdk) deleteConditionInKptFile(kind gvkKind, forRef, objRef *corev1.ObjectReference) {
-	if forRef == nil {
-		return
-	}
-	if objRef == nil {
-		// delete condition
-		r.kptf.DeleteCondition(kptfilelibv1.GetConditionType(forRef))
-		// update the status back in the inventory
-		r.inv.delete(&gvkKindCtx{gvkKind: kind}, []corev1.ObjectReference{*forRef})
-	} else {
-		// delete condition
-		r.kptf.DeleteCondition(kptfilelibv1.GetConditionType(objRef))
-		// update the status back in the inventory
-		r.inv.delete(&gvkKindCtx{gvkKind: kind}, []corev1.ObjectReference{*forRef, *objRef})
-	}
-}
-
-func (r *sdk) setConditionInKptFile(a action, kind gvkKind, forRef, objRef *corev1.ObjectReference, status kptv1.ConditionStatus, msg string) {
-	if forRef == nil {
-		return
-	}
-	if objRef == nil {
-		c := kptv1.Condition{
-			Type:    kptfilelibv1.GetConditionType(forRef),
-			Status:  status,
-			Message: fmt.Sprintf("%s %s", a, msg),
-		}
-		r.kptf.SetConditions(c)
-	} else {
-		c := kptv1.Condition{
-			Type:    kptfilelibv1.GetConditionType(objRef),
-			Status:  status,
-			Reason:  fmt.Sprintf("%s.%s", kptfilelibv1.GetConditionType(&r.cfg.For), forRef.Name),
-			Message: fmt.Sprintf("%s %s", a, msg),
-		}
-		r.kptf.SetConditions(c)
-		// update the condition status back in the inventory
-		r.inv.set(&gvkKindCtx{gvkKind: kind}, []corev1.ObjectReference{*forRef, *objRef}, &c, false)
-	}
-}
-
-func (r *sdk) setObjectInResourceList(kind gvkKind, forRef, objRef *corev1.ObjectReference, obj *object) {
-	if forRef == nil || obj == nil {
-		return
-	}
-	if objRef == nil {
-		r.rl.SetObject(&obj.obj)
-		// update the resource status back in the inventory
-		r.inv.set(&gvkKindCtx{gvkKind: kind}, []corev1.ObjectReference{*forRef}, &obj.obj, false)
-	} else {
-		r.rl.SetObject(&obj.obj)
-		// update the resource status back in the inventory
-		r.inv.set(&gvkKindCtx{gvkKind: kind}, []corev1.ObjectReference{*forRef, *objRef}, &obj.obj, false)
-	}
-
 }

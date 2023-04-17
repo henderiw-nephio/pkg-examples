@@ -91,12 +91,18 @@ func (r *sdk) Run() {
 		return
 	}
 
-	// initialize inventory + call global watches
+	// initialize inventory 
 	r.populateInventory()
+	// list the result of inventory -> used for debug only
 	r.listInventory()
+	// call the global watches is used to inform the fn/controller
+	// of global watch data. The fn/controller can use it to parse the data
+	// and/or return an error is certain info is missing
 	r.callGlobalWatches()
-	// stage 1 of the sdk pipeline
+	// stage 1 of the sdk pipeline 
+	// populate the child resources as if nothing existed
 	r.populateChildren()
+	// update the children based on the diff between existing and new resources/conditions
 	r.updateChildren()
 	// stage 2 of the sdk pipeline
 	r.generateResource()

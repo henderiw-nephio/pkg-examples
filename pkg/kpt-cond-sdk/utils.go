@@ -22,6 +22,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+// validateGVKRef returns an error if the ApiVersion or Kind 
+// contain an empty string 
 func validateGVKRef(ref corev1.ObjectReference) error {
 	if ref.APIVersion == "" || ref.Kind == ""  {
 		return fmt.Errorf("gvk not initialized, got: %v", ref)
@@ -29,6 +31,8 @@ func validateGVKRef(ref corev1.ObjectReference) error {
 	return nil
 }
 
+// validateGVKNRef returns an error if the ApiVersion or Kind or Name
+// contain an empty string 
 func validateGVKNRef(ref corev1.ObjectReference) error {
 	if ref.APIVersion == "" || ref.Kind == "" || ref.Name == "" {
 		return fmt.Errorf("gvk or name not initialized, got: %v", ref)
@@ -36,6 +40,7 @@ func validateGVKNRef(ref corev1.ObjectReference) error {
 	return nil
 }
 
+// getGVKRefFromGVKNref return a new objectReference with only APIVersion and Kind
 func getGVKRefFromGVKNref(ref *corev1.ObjectReference) *corev1.ObjectReference {
 	return &corev1.ObjectReference{APIVersion: ref.APIVersion, Kind: ref.Kind}
 }

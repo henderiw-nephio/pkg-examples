@@ -35,9 +35,10 @@ type Inventory interface {
 	delete(kc *gvkKindCtx, refs []corev1.ObjectReference) error
 	get(k gvkKind, ref *corev1.ObjectReference) map[corev1.ObjectReference]*resourceCtx
 	list() [][]sdkObjectReference
-
+	// readiness
 	isReady() bool
 	getReadyMap() map[corev1.ObjectReference]*readyCtx
+	// diff
 	diff() (map[corev1.ObjectReference]*inventoryDiff, error)
 }
 

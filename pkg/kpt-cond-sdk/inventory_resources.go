@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+// defines the kind of gvks supported by the inventory
 type gvkKind string
 
 const (
@@ -32,6 +33,7 @@ const (
 	watchGVKKind gvkKind = "watch"
 )
 
+// to make the resource list of the inventory geenric we add the gvkKind on top of the objectReference
 type sdkObjectReference struct {
 	gvkKind gvkKind
 	ref     corev1.ObjectReference
@@ -160,6 +162,7 @@ func (r *resources) delete(kc *gvkKindCtx, refs []corev1.ObjectReference) error 
 	return r.walk(actionDelete, kc, refs, nil, false)
 }
 
+// walk implements a generic walk over the resources with action create or delete that represent set/delete
 func (r *resources) walk(a action, kc *gvkKindCtx, refs []corev1.ObjectReference, x any, new newResource) error {
 	//fn.Logf("entry tree action: %s, kind: kc: %v refs: %v\n", a, kc, refs)
 	if len(refs) > 1 {
@@ -211,6 +214,7 @@ func (r *resources) walk(a action, kc *gvkKindCtx, refs []corev1.ObjectReference
 	return nil
 }
 
+// isInitialized checks if the resources are initialized
 func (r *resources) isInitialized(sdkRef sdkObjectReference) bool {
 	if _, ok := r.resources[sdkRef]; !ok {
 		return false
@@ -218,12 +222,14 @@ func (r *resources) isInitialized(sdkRef sdkObjectReference) bool {
 	return true
 }
 
+// init initialize the resources
 func (r *resources) init(sdkRef sdkObjectReference) {
 	r.resources[sdkRef] = &resources{
 		resources: map[sdkObjectReference]*resources{},
 	}
 }
 
+// validateWalk checks if the attributes of the walk are valid. if not an error is returned
 func validateWalk(kc *gvkKindCtx, refs []corev1.ObjectReference) error {
 	switch len(refs) {
 	case 0:

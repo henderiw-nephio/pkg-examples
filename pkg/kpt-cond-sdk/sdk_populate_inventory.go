@@ -131,9 +131,3 @@ func (r *sdk) populate(forOwnerRef, ref, ownerRef *corev1.ObjectReference, x any
 		}
 	}
 }
-
-func (r *sdk) listInventory() {
-	for _, entry := range r.inv.list() {
-		fn.Logf("resources entry: %v\n", entry)
-	}
-}
