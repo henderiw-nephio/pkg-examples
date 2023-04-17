@@ -38,7 +38,7 @@ func (r *sdk) populateChildren() {
 			res, err := r.cfg.PopulateOwnResourcesFn(forObj)
 			if err != nil {
 				fn.Log("error populating new resource: %v", err.Error())
-				r.rl.AddResult(err, forObj)
+				r.rl.Results = append(r.rl.Results, fn.ErrorConfigObjectResult(err, forObj))
 			} else {
 				for _, newObj := range res {
 					objRef := corev1.ObjectReference{APIVersion: newObj.GetAPIVersion(), Kind: newObj.GetKind(), Name: newObj.GetName()}
@@ -63,7 +63,7 @@ func (r *sdk) updateChildren() {
 	// perform a diff to validate the existing resource against the new resources
 	diffMap, err := r.inv.diff()
 	if err != nil {
-		r.rl.AddResult(err, r.rl.GetObjects()[0])
+		r.rl.Results = append(r.rl.Results, fn.ErrorConfigObjectResult(err, r.rl.Items.GetRootKptfile()))
 	}
 	fn.Logf("diff: %v\n", diffMap)
 
@@ -120,10 +120,5 @@ func (r *sdk) updateChildren() {
 		}
 	}
 	// update the kptfile with the latest consitions
-	kptfile, err := r.kptf.ParseKubeObject()
-	if err != nil {
-		fn.Log(err)
-		r.rl.AddResult(err, r.rl.GetObjects()[0])
-	}
-	r.rl.SetObject(kptfile)
+	r.updateKptFile()
 }

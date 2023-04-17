@@ -38,7 +38,7 @@ func (r *sdk) generateResource() {
 		for _, readyCtx := range readyMap {
 			if readyCtx.forObj != nil {
 				if len(r.cfg.Owns) == 0 {
-					r.rl.DeleteObject(readyCtx.forObj)
+					r.deleteObjFromResourceList(readyCtx.forObj)
 				}
 			}
 		}
@@ -57,7 +57,8 @@ func (r *sdk) generateResource() {
 			if readyCtx.forObj != nil {
 				// TBD if this is the right approach -> avoids deleting interface
 				if len(r.cfg.Owns) == 0 {
-					r.rl.DeleteObject(readyCtx.forObj)
+					r.deleteObjFromResourceList(readyCtx.forObj)
+
 				}
 			}
 			continue
@@ -74,12 +75,7 @@ func (r *sdk) generateResource() {
 		}
 	}
 	// update the kptfile with the latest conditions
-	kptfile, err := r.kptf.ParseKubeObject()
-	if err != nil {
-		fn.Log(err)
-		r.rl.AddResult(err, r.rl.GetObjects()[0])
-	}
-	r.rl.SetObject(kptfile)
+	r.updateKptFile()
 }
 
 // handleGenerateUpdate performs the fn/controller callback and handles the response
@@ -88,20 +84,12 @@ func (r *sdk) handleGenerateUpdate(forRef corev1.ObjectReference, forObj *fn.Kub
 	newObj, err := r.cfg.GenerateResourceFn(forObj, objs)
 	if err != nil {
 		fn.Log("error generating new resource: %v", err.Error())
-		if forObj != nil {
-			r.rl.AddResult(err, forObj)
-		} else {
-			r.rl.AddResult(err, r.rl.GetObjects()[0])
-		}
+		r.rl.Results = append(r.rl.Results, fn.ErrorResult(fmt.Errorf("cannot generate resource GenerateResourceFn returned nil, for: %v", forRef)))
 		return
 	}
 	if newObj == nil {
 		fn.Logf("cannot generate resource GenerateResourceFn returned nil, for: %v\n", forRef)
-		if forObj != nil {
-			r.rl.AddResult(fmt.Errorf("cannot generate resource GenerateResourceFn returned nil, for: %v", forRef), forObj)
-		} else {
-			r.rl.AddResult(fmt.Errorf("cannot generate resource GenerateResourceFn returned nil, for: %v", forRef), r.rl.GetObjects()[0])
-		}
+		r.rl.Results = append(r.rl.Results, fn.ErrorResult(fmt.Errorf("cannot generate resource GenerateResourceFn returned nil, for: %v", forRef)))
 		return
 	}
 	// set owner reference on the new resource if not having owns

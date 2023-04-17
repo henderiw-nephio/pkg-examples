@@ -18,6 +18,7 @@ package kptcondsdk
 import (
 	"fmt"
 
+	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
 	kptv1 "github.com/GoogleContainerTools/kpt/pkg/api/kptfile/v1"
 	kptfilelibv1 "github.com/nephio-project/nephio/krm-functions/lib/kptfile/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -94,12 +95,14 @@ func (r *sdk) setObjectInResourceList(kind gvkKind, refs []*corev1.ObjectReferen
 	}
 	forRef := refs[0]
 	if len(refs) == 1 {
-		r.rl.SetObject(&obj.obj)
+		//r.rl.SetObject(&obj.obj)
+		r.rl.UpsertObjectToItems(&obj.obj, nil, true)
 		// update the resource status back in the inventory
 		r.inv.set(&gvkKindCtx{gvkKind: kind}, []corev1.ObjectReference{*forRef}, &obj.obj, false)
 	} else {
 		objRef := refs[1]
-		r.rl.SetObject(&obj.obj)
+		//r.rl.SetObject(&obj.obj)
+		r.rl.UpsertObjectToItems(&obj.obj, nil, true)
 		// update the resource status back in the inventory
 		r.inv.set(&gvkKindCtx{gvkKind: kind}, []corev1.ObjectReference{*forRef, *objRef}, &obj.obj, false)
 	}
@@ -110,4 +113,32 @@ func IsRefsValid(refs []*corev1.ObjectReference) bool {
 		return false
 	}
 	return true
+}
+
+func (r *sdk) updateKptFile() {
+	kptfile, err := r.kptf.ParseKubeObject()
+	if err != nil {
+		fn.Log(err)
+		r.rl.Results = append(r.rl.Results, fn.ErrorConfigObjectResult(err, r.rl.Items.GetRootKptfile()))
+	}
+	r.rl.UpsertObjectToItems(kptfile, nil, true)
+}
+
+func (r *sdk) deleteObjFromResourceList(obj *fn.KubeObject) {
+	for idx, o := range r.rl.Items {
+		if isGVKNNEqual(o, obj) {
+			r.rl.Items = append(r.rl.Items[:idx], r.rl.Items[idx+1:]...)
+		}
+	}
+}
+
+// isGVKNEqual validates if the APIVersion, Kind, Name and Namespace of both fn.KubeObject are equal
+func isGVKNNEqual(curobj, newobj *fn.KubeObject) bool {
+	if curobj.GetAPIVersion() == newobj.GetAPIVersion() &&
+		curobj.GetKind() == newobj.GetKind() &&
+		curobj.GetName() == newobj.GetName() &&
+		curobj.GetNamespace() == newobj.GetNamespace() {
+		return true
+	}
+	return false
 }

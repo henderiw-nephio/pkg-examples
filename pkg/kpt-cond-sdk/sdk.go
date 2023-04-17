@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
-	"github.com/example.com/foo/pkg/kptrl"
 	kptfilelibv1 "github.com/nephio-project/nephio/krm-functions/lib/kptfile/v1"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -62,7 +61,7 @@ func New(rl *fn.ResourceList, cfg *Config) (KptCondSDK, error) {
 	r := &sdk{
 		cfg:   cfg,
 		inv:   inv,
-		rl:    kptrl.New(rl),
+		rl:    rl,
 		ready: true,
 	}
 	return r, nil
@@ -71,27 +70,27 @@ func New(rl *fn.ResourceList, cfg *Config) (KptCondSDK, error) {
 type sdk struct {
 	cfg   *Config
 	inv   Inventory
-	rl    *kptrl.ResourceList
+	rl    *fn.ResourceList
 	kptf  kptfilelibv1.KptFile
 	ready bool
 }
 
 func (r *sdk) Run() {
-	if r.rl.GetObjects().Len() == 0 {
-		r.rl.AddResult(fmt.Errorf("no resources present in the resourcelist"), nil)
+	if r.rl.Items.Len() == 0 {
+		r.rl.Results = append(r.rl.Results, fn.ErrorResult(fmt.Errorf("no resources present in the resourcelist")))
 		return
 	}
 	// get the kptfile first as we need it in various places
 	// we assume the kpt file is always resource idx 0 in the resourcelist
 	var err error
-	r.kptf, err = kptfilelibv1.New(r.rl.GetObjects()[0].String())
+	r.kptf, err = kptfilelibv1.New(r.rl.Items.GetRootKptfile().String())
 	if err != nil {
 		fn.Log("error unmarshal kptfile during populateInventory")
-		r.rl.AddResult(err, r.rl.GetObjects()[0])
+		r.rl.Results = append(r.rl.Results, fn.ErrorConfigObjectResult(err, r.rl.Items.GetRootKptfile()))
 		return
 	}
 
-	// initialize inventory 
+	// initialize inventory
 	r.populateInventory()
 	// list the result of inventory -> used for debug only
 	r.listInventory()
@@ -99,7 +98,7 @@ func (r *sdk) Run() {
 	// of global watch data. The fn/controller can use it to parse the data
 	// and/or return an error is certain info is missing
 	r.callGlobalWatches()
-	// stage 1 of the sdk pipeline 
+	// stage 1 of the sdk pipeline
 	// populate the child resources as if nothing existed
 	r.populateChildren()
 	// update the children based on the diff between existing and new resources/conditions
