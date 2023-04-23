@@ -1,0 +1,8 @@
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: n4
+  annotations:
+    fnruntime.nephio.org/owner: req.nephio.org/v1alpha1.Interface.n4
+spec:
+  config: '{"cniVersion":"","vlan":0,"plugins":[{"type":"macvlan","capabilities":{"ips":false,"mac":false},"master":"eth1","mode":"","ipam":{"type":"","addresses":[{"address":"14.0.0.3/24","gateway":"14.0.0.1"}]}}]}'

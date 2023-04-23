@@ -1,6 +1,6 @@
 VERSION ?= latest
 REGISTRY ?= europe-docker.pkg.dev/srlinux/eu.gcr.io
-IMG ?= $(REGISTRY)/interface-fn:${VERSION}
+IMG ?= $(REGISTRY)/nad-fn:${VERSION}
 
 ROOTDIR=$(abspath $(CURDIR)/..)
 

@@ -76,6 +76,10 @@ func TestGetGVKNFromConditionType(t *testing.T) {
 			t:    "a.b/c.d.e",
 			want: &corev1.ObjectReference{APIVersion: "a.b/c", Kind: "d", Name: "e"},
 		},
+		"nad": {
+			t: "k8s.cni.cncf.io/v1.NetworkAttachmentDefinition.n3",
+			want: &corev1.ObjectReference{APIVersion: "k8s.cni.cncf.io/v1", Kind: "NetworkAttachmentDefinition", Name: "n3"},
+		},
 	}
 
 	for name, tc := range tests {

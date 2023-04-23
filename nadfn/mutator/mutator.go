@@ -87,12 +87,15 @@ func (r *mutatorCtx) generateResourceFn(forObj *fn.KubeObject, objs fn.KubeObjec
 	meta := metav1.ObjectMeta{Name: objs[0].GetName()}
 	nad, err := nadlibv1.NewFromGoStruct(nadlibv1.BuildNetworkAttachementDefinition(
 		meta,
-		nadv1.NetworkAttachmentDefinitionSpec{},
+		nadv1.NetworkAttachmentDefinitionSpec{
+			Config: "",
+		},
 	))
 	if err != nil {
 		return nil, err
 	}
 
+	fn.Logf("cniType: %s, masterInterface: %s\n", r.cniType, r.masterInterface)
 	nad.SetCNIType(r.cniType) // cniType should come from interface
 	nad.SetNadMaster(r.masterInterface)
 

@@ -216,10 +216,15 @@ func (r *Nad) SetConfigSpec(spec *nadv1.NetworkAttachmentDefinitionSpec) error {
 
 func (r *Nad) SetCNIType(cniType string) error {
 	if cniType != "" {
-		nadConfigStruct := NadConfig{}
+		nadConfigStruct := NadConfig{
+			Plugins: []PluginCniType{{}},
+		}
+		/*
+		r.NestedSubObject()
 		if err := json.Unmarshal([]byte(r.GetStringValue(ConfigType...)), &nadConfigStruct); err != nil {
 			panic(err)
 		}
+		*/
 		nadConfigStruct.Plugins[0].Type = cniType
 		b, err := json.Marshal(nadConfigStruct)
 		if err != nil {

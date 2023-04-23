@@ -9,3 +9,7 @@ spec:
     name: vpc-internal
   cniType: sriov
   attachementType: vlan
+status:
+  ipAllocationStatus:
+    prefix: 14.0.0.3/24
+    gateway: 14.0.0.1

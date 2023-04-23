@@ -1,7 +1,3 @@
-VERSION ?= latest
-REGISTRY ?= europe-docker.pkg.dev/srlinux/eu.gcr.io
-IMG ?= $(REGISTRY)/pkg-examples:${VERSION}
-
 .PHONY: all
 all: test
 
@@ -15,7 +11,9 @@ test: fmt vet ## Run tests.
 	go test ./...
 
 docker-build:  ## Build docker images.
-	docker build -t ${IMG} .
+	cd interfacefn; make docker-build
+	cd nadfn; make docker-build
 
 docker-push: ## Build docker images.
-	docker push ${IMG}
+	cd interfacefn; make docker-push
+	cd nadfn; make docker-push
