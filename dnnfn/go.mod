@@ -1,4 +1,4 @@
-module github.com/henderiw-nephio/pkg-examples/interfacefn
+module github.com/henderiw-nephio/pkg-examples/dnnfn
 
 go 1.20
 
@@ -6,8 +6,7 @@ replace github.com/henderiw-nephio/pkg-examples => ../
 
 require (
 	github.com/GoogleContainerTools/kpt-functions-sdk/go/fn v0.0.0-20230302070146-e8e9cb3c3ae2
-	github.com/henderiw-nephio/pkg-examples v0.0.0-20230423114900-44ac71e807f6
-	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.4.0
+	github.com/henderiw-nephio/pkg-examples v0.0.0-00010101000000-000000000000
 	github.com/nephio-project/api v0.0.0-20230421174414-507255314347
 	github.com/nephio-project/nephio-controller-poc v0.0.2
 	github.com/nokia/k8s-ipam v0.0.4-0.20230416191338-dcd944a8d636
@@ -37,7 +36,6 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kentik/patricia v1.2.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect

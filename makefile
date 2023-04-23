@@ -13,7 +13,11 @@ test: fmt vet ## Run tests.
 docker-build:  ## Build docker images.
 	cd interfacefn; make docker-build
 	cd nadfn; make docker-build
+	cd dnnfn; make docker-build
+	cd nfdeployfn; make docker-build
 
 docker-push: ## Build docker images.
 	cd interfacefn; make docker-push
 	cd nadfn; make docker-push
+	cd dnnfn; make docker-push
+	cd nfdeployfn; make docker-push

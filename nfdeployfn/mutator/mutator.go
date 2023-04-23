@@ -1,4 +1,4 @@
-package nfdeployfn
+package mutator
 
 import (
 	"fmt"

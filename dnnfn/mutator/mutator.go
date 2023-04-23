@@ -1,4 +1,4 @@
-package dnnfn
+package mutator
 
 import (
 	"fmt"
