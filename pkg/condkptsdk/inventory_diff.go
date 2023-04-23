@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package kptcondsdk
+package condkptsdk
 
 import (
 	"fmt"
@@ -49,12 +49,12 @@ type object struct {
 // the diff compares the eixisiting resource/condition inventory
 // against the new resource/condition inventory and provide CRUD operation
 // based on that comparisons.
-func (r *inventory) diff() (map[corev1.ObjectReference]*inventoryDiff, error) {
+func (r *inv) diff() (map[corev1.ObjectReference]*inventoryDiff, error) {
 	r.m.RLock()
 	defer r.m.RUnlock()
 	diffMap := map[corev1.ObjectReference]*inventoryDiff{}
 
-	for forRef, resCtx := range r.get(forGVKKind, nil) {
+	for forRef, resCtx := range r.get(forGVKKind, []corev1.ObjectReference{{}}) {
 		diffMap[forRef] = &inventoryDiff{
 			deleteObjs:              []*object{},
 			updateObjs:              []*object{},
@@ -67,7 +67,7 @@ func (r *inventory) diff() (map[corev1.ObjectReference]*inventoryDiff, error) {
 		// all child resources and conditions
 		//fn.Logf("diff: forRef: %v, existingResource: %v\n", forRef, resCtx.existingResource)
 		if resCtx.existingResource == nil {
-			for ref, resCtx := range r.get(ownGVKKind, &forRef) {
+			for ref, resCtx := range r.get(ownGVKKind, []corev1.ObjectReference{forRef, {}}) {
 				fn.Logf("delete resource and conditions: forRef: %v, ownRef: %v\n", forRef, ref)
 				diffMap[forRef].deleteForCondition = true
 				if resCtx.existingCondition != nil {
@@ -78,7 +78,7 @@ func (r *inventory) diff() (map[corev1.ObjectReference]*inventoryDiff, error) {
 				}
 			}
 		} else {
-			for ownRef, resCtx := range r.get(ownGVKKind, &forRef) {
+			for ownRef, resCtx := range r.get(ownGVKKind, []corev1.ObjectReference{forRef, {}}) {
 				fn.Logf("diff: forRef: %v, ownRef: %v, existingResource: %v, newResource: %v\n", forRef, ownRef, resCtx.existingResource, resCtx.newResource)
 				// condition diff handling
 				switch {
@@ -111,12 +111,12 @@ func (r *inventory) diff() (map[corev1.ObjectReference]*inventoryDiff, error) {
 					// check diff
 					existingSpec, err := getSpec(resCtx.existingResource)
 					if err != nil {
-						fn.Log("cannot get spec from exisiting obj, err: %v", err)
+						fn.Logf("cannot get spec from exisiting obj, err: %v\n", err)
 						continue
 					}
 					newSpec, err := getSpec(resCtx.newResource)
 					if err != nil {
-						fn.Log("cannot get spec from exisiting obj, err: %v", err)
+						fn.Logf("cannot get spec from exisiting obj, err: %v\n", err)
 						continue
 					}
 

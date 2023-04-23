@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package kptcondsdk
+package condkptsdk
 
 import (
 	"fmt"
@@ -29,9 +29,9 @@ import (
 // First readiness is validated in 2 steps:
 // - global readiness: when key resources are missing
 // - per instance readiness: when certain parts of an instance readiness is missing
-func (r *sdk) generateResource() {
+func (r *sdk) generateResource() error {
 	fn.Logf("generateResource isReady: %t\n", r.inv.isReady())
-	if !r.inv.isReady() {
+	if !r.ready || !r.inv.isReady() {
 		// when the overal status is not ready delete all resources
 		// TBD if we need to check the delete annotation
 		readyMap := r.inv.getReadyMap()
@@ -42,13 +42,15 @@ func (r *sdk) generateResource() {
 				}
 			}
 		}
-		return
+		return nil
 	}
 	// the overall status is ready, so lets check the readiness map
 	readyMap := r.inv.getReadyMap()
 	if len(readyMap) == 0 {
 		// this is when the global resource is not found
-		r.handleGenerateUpdate(corev1.ObjectReference{APIVersion: r.cfg.For.APIVersion, Kind: r.cfg.For.Kind, Name: r.kptf.GetKptFile().Name}, nil, []*fn.KubeObject{})
+		if err := r.handleGenerateUpdate(corev1.ObjectReference{APIVersion: r.cfg.For.APIVersion, Kind: r.cfg.For.Kind, Name: r.kptf.GetKptFile().Name}, nil, fn.KubeObjects{}); err != nil {
+			return err
+		}
 	}
 	for forRef, readyCtx := range readyMap {
 		fn.Logf("generateResource readyMap: forRef %v, readyCtx: %v\n", forRef, readyCtx)
@@ -64,39 +66,47 @@ func (r *sdk) generateResource() {
 			continue
 		}
 		if r.cfg.GenerateResourceFn != nil {
-			objs := []*fn.KubeObject{}
+			objs := fn.KubeObjects{}
 			for _, o := range readyCtx.owns {
-				objs = append(objs, &o)
+				x := o
+				objs = append(objs, &x)
 			}
 			for _, o := range readyCtx.watches {
-				objs = append(objs, &o)
+				x := o
+				objs = append(objs, &x)
 			}
-			r.handleGenerateUpdate(forRef, readyCtx.forObj, objs)
+			if err := r.handleGenerateUpdate(forRef, readyCtx.forObj, objs); err != nil {
+				return err
+			}
 		}
 	}
 	// update the kptfile with the latest conditions
-	r.updateKptFile()
+	return r.updateKptFile()
 }
 
 // handleGenerateUpdate performs the fn/controller callback and handles the response
 // by updating the condition and resource in kptfile/resourcelist
-func (r *sdk) handleGenerateUpdate(forRef corev1.ObjectReference, forObj *fn.KubeObject, objs []*fn.KubeObject) {
+func (r *sdk) handleGenerateUpdate(forRef corev1.ObjectReference, forObj *fn.KubeObject, objs fn.KubeObjects) error {
 	newObj, err := r.cfg.GenerateResourceFn(forObj, objs)
 	if err != nil {
-		fn.Log("error generating new resource: %v", err.Error())
+		fn.Logf("error generating new resource: %v\n", err.Error())
 		r.rl.Results = append(r.rl.Results, fn.ErrorResult(fmt.Errorf("cannot generate resource GenerateResourceFn returned nil, for: %v", forRef)))
-		return
+		return err
 	}
 	if newObj == nil {
 		fn.Logf("cannot generate resource GenerateResourceFn returned nil, for: %v\n", forRef)
 		r.rl.Results = append(r.rl.Results, fn.ErrorResult(fmt.Errorf("cannot generate resource GenerateResourceFn returned nil, for: %v", forRef)))
-		return
+		return fmt.Errorf("cannot generate resource GenerateResourceFn returned nil, for: %v", forRef)
 	}
 	// set owner reference on the new resource if not having owns
 	// as you ste it to yourself
 	if len(r.cfg.Owns) == 0 {
-		newObj.SetAnnotation(FnRuntimeOwner, kptfilelibv1.GetConditionType(&forRef))
+		if err := newObj.SetAnnotation(FnRuntimeOwner, kptfilelibv1.GetConditionType(&forRef)); err != nil {
+			fn.Logf("error setting new annotation: %v\n", err.Error())
+			r.rl.Results = append(r.rl.Results, fn.ErrorConfigObjectResult(err, newObj))
+			return err
+		}
 	}
 	// add the resource to the kptfile and updates the resource in the resourcelist
-	r.handleUpdate(actionUpdate, forGVKKind, []*corev1.ObjectReference{&forRef}, &object{obj: *newObj}, kptv1.ConditionTrue, "done", true)
+	return r.handleUpdate(actionUpdate, forGVKKind, []corev1.ObjectReference{forRef}, &object{obj: *newObj}, kptv1.ConditionTrue, "done", true)
 }

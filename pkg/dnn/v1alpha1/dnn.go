@@ -18,7 +18,7 @@ package v1alpha1
 
 import (
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
-	"github.com/example.com/foo/pkg/parser"
+	"github.com/henderiw-nephio/pkg-examples/pkg/parser"
 	nephioreqv1alpha1 "github.com/nephio-project/api/nf_requirements/v1alpha1"
 )
 

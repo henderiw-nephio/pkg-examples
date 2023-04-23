@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package kptcondsdk
+package condkptsdk
 
 import (
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
@@ -33,22 +33,33 @@ type readyCtx struct {
 // watch resource. Used in stage1 and stage2
 // if the global watched resource(s) dont exist we are not ready
 // if the global watched resource(s) have a False condition status we are not ready
-func (r *inventory) isReady() bool {
+func (r *inv) isReady() bool {
 	r.m.RLock()
 	defer r.m.RUnlock()
 	// check readiness, we start positive
 	ready := true
 	// the readiness is determined by the global watch resources
-	for watchRef, resCtx := range r.get(watchGVKKind, nil) {
-		fn.Logf("isReady: watchRef: %v, resCtx: %v\n", watchRef, resCtx)
+	for watchRef, resCtx := range r.get(watchGVKKind, []corev1.ObjectReference{{}}) {
+		fn.Logf("isReady: watchRef: %v, resCtx: %#v\n", watchRef, *resCtx)
+		if resCtx.existingCondition != nil {
+			fn.Logf("isReady: watchRef: %v, condition: %#v\n", watchRef, resCtx.existingCondition)
+		}
 		// if global watched resource does not exist we fail readiness
 		// if the condition is present and the status is False something is pending, so we
 		// fail readiness
-		if resCtx.existingResource == nil ||
-			(resCtx.existingCondition != nil &&
-				resCtx.existingCondition.Status == kptv1.ConditionStatus(corev1.ConditionFalse)) {
-			ready = false
-			break
+		if resCtx.existingResource == nil {
+			if resCtx.existingCondition == nil {
+				return false
+			}
+			if resCtx.existingCondition != nil &&
+				resCtx.existingCondition.Status == kptv1.ConditionFalse {
+				return false
+			}
+		} else {
+			if resCtx.existingCondition != nil &&
+				resCtx.existingCondition.Status == kptv1.ConditionFalse {
+				return false
+			}
 		}
 	}
 	return ready
@@ -59,19 +70,19 @@ func (r *inventory) isReady() bool {
 // Both own and watches that are dependent on the forResource are validated for
 // readiness
 // The readyMap is used only in stage 2 of the sdk
-func (r *inventory) getReadyMap() map[corev1.ObjectReference]*readyCtx {
+func (r *inv) getReadyMap() map[corev1.ObjectReference]*readyCtx {
 	r.m.RLock()
 	defer r.m.RUnlock()
 
 	readyMap := map[corev1.ObjectReference]*readyCtx{}
-	for forRef, resCtx := range r.get(forGVKKind, nil) {
+	for forRef, resCtx := range r.get(forGVKKind, []corev1.ObjectReference{{}}) {
 		readyMap[forRef] = &readyCtx{
 			ready:   true,
 			owns:    map[corev1.ObjectReference]fn.KubeObject{},
 			watches: map[corev1.ObjectReference]fn.KubeObject{},
 			forObj:  resCtx.existingResource,
 		}
-		for ref, resCtx := range r.get(ownGVKKind, &forRef) {
+		for ref, resCtx := range r.get(ownGVKKind, []corev1.ObjectReference{forRef, {}}) {
 			if resCtx.existingCondition == nil ||
 				resCtx.existingCondition.Status == kptv1.ConditionStatus(corev1.ConditionFalse) {
 				readyMap[forRef].ready = false
@@ -80,7 +91,7 @@ func (r *inventory) getReadyMap() map[corev1.ObjectReference]*readyCtx {
 				readyMap[forRef].owns[ref] = *resCtx.existingResource
 			}
 		}
-		for ref, resCtx := range r.get(watchGVKKind, &forRef) {
+		for ref, resCtx := range r.get(watchGVKKind, []corev1.ObjectReference{forRef, {}}) {
 			// TBD we need to look at some watches that we want to check the condition for and others not
 			fn.Logf("getReadyMap: ref: %v, resCtx condition %v\n", ref, resCtx.existingCondition)
 			if resCtx.existingCondition == nil || resCtx.existingCondition.Status == kptv1.ConditionStatus(corev1.ConditionFalse) {

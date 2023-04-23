@@ -5,10 +5,10 @@ import (
 	"reflect"
 
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
-	clusterctxtlibv1alpha1 "github.com/example.com/foo/pkg/clustercontext/v1alpha1"
-	dnnlibv1alpha1 "github.com/example.com/foo/pkg/dnn/v1alpha1"
-	ipallocv1v1alpha1 "github.com/example.com/foo/pkg/ipallocation/v1alpha1"
-	kptcondsdk "github.com/example.com/foo/pkg/kpt-cond-sdk"
+	clusterctxtlibv1alpha1 "github.com/henderiw-nephio/pkg-examples/pkg/clustercontext/v1alpha1"
+	condkptsdk "github.com/henderiw-nephio/pkg-examples/pkg/condkptsdk"
+	dnnlibv1alpha1 "github.com/henderiw-nephio/pkg-examples/pkg/dnn/v1alpha1"
+	ipallocv1v1alpha1 "github.com/henderiw-nephio/pkg-examples/pkg/ipallocation/v1alpha1"
 	nephioreqv1alpha1 "github.com/nephio-project/api/nf_requirements/v1alpha1"
 	infrav1alpha1 "github.com/nephio-project/nephio-controller-poc/apis/infra/v1alpha1"
 	allocv1alpha1 "github.com/nokia/k8s-ipam/apis/alloc/common/v1alpha1"
@@ -18,27 +18,27 @@ import (
 )
 
 type mutatorCtx struct {
-	fnCondSdk kptcondsdk.KptCondSDK
+	fnCondSdk condkptsdk.KptCondSDK
 	siteCode  string
 }
 
 func Run(rl *fn.ResourceList) (bool, error) {
 	m := mutatorCtx{}
 	var err error
-	m.fnCondSdk, err = kptcondsdk.New(
+	m.fnCondSdk, err = condkptsdk.New(
 		rl,
-		&kptcondsdk.Config{
+		&condkptsdk.Config{
 			For: corev1.ObjectReference{
 				APIVersion: nephioreqv1alpha1.GroupVersion.Identifier(),
 				Kind:       nephioreqv1alpha1.DataNetworkKind,
 			},
-			Owns: map[corev1.ObjectReference]kptcondsdk.ResourceKind{
+			Owns: map[corev1.ObjectReference]condkptsdk.ResourceKind{
 				{
 					APIVersion: ipamv1alpha1.GroupVersion.Identifier(),
 					Kind:       ipamv1alpha1.IPAllocationKind,
-				}: kptcondsdk.ResourceKindFull,
+				}: condkptsdk.ChildRemote,
 			},
-			Watch: map[corev1.ObjectReference]kptcondsdk.WatchCallbackFn{
+			Watch: map[corev1.ObjectReference]condkptsdk.WatchCallbackFn{
 				{
 					APIVersion: infrav1alpha1.GroupVersion.Identifier(),
 					Kind:       reflect.TypeOf(infrav1alpha1.ClusterContext{}).Name(),
@@ -51,8 +51,7 @@ func Run(rl *fn.ResourceList) (bool, error) {
 	if err != nil {
 		rl.Results = append(rl.Results, fn.ErrorConfigObjectResult(err, nil))
 	}
-	m.fnCondSdk.Run()
-	return true, nil
+	return m.fnCondSdk.Run()
 }
 
 func (r *mutatorCtx) ClusterContextCallbackFn(o *fn.KubeObject) error {
@@ -65,13 +64,13 @@ func (r *mutatorCtx) ClusterContextCallbackFn(o *fn.KubeObject) error {
 	return nil
 }
 
-func (r *mutatorCtx) populateInterfaceFn(o *fn.KubeObject) ([]*fn.KubeObject, error) {
-	resources := []*fn.KubeObject{}
+func (r *mutatorCtx) populateInterfaceFn(o *fn.KubeObject) (fn.KubeObjects, error) {
+	resources := fn.KubeObjects{}
 
 	dnn := dnnlibv1alpha1.NewFromKubeObject(o)
 
 	for _, pool := range dnn.GetPools() {
-		alloc, err := ipallocv1v1alpha1.NewFromGoStruct(ipamv1alpha1.BuildIPAllocation(
+		alloc := ipamv1alpha1.BuildIPAllocation(
 			metav1.ObjectMeta{
 				//Name: o.GetName(),
 				Name: fmt.Sprintf("%s-%s", o.GetName(), pool.Name),
@@ -89,24 +88,25 @@ func (r *mutatorCtx) populateInterfaceFn(o *fn.KubeObject) ([]*fn.KubeObject, er
 				PrefixLength: pool.PrefixLength,
 			},
 			ipamv1alpha1.IPAllocationStatus{},
-		))
+		)
+		o, err := fn.NewFromTypedObject(alloc)
 		if err != nil {
 			return nil, err
 		}
 
-		resources = append(resources, alloc.GetKubeObject())
+		resources = append(resources, o)
 	}
 	return resources, nil
 }
 
-func (r *mutatorCtx) generateResourceFn(forObj *fn.KubeObject, objs []*fn.KubeObject) (*fn.KubeObject, error) {
+func (r *mutatorCtx) generateResourceFn(forObj *fn.KubeObject, objs fn.KubeObjects) (*fn.KubeObject, error) {
 	// we expect a for object here
 	if forObj == nil {
 		return nil, fmt.Errorf("expected a for object but got nil")
 	}
 	for _, o := range objs {
 		if o.GetAPIVersion() == ipamv1alpha1.GroupVersion.Identifier() && o.GetKind() == ipamv1alpha1.IPAllocationKind {
-			alloc := ipallocv1v1alpha1.NewFromKubeObject(o)
+			alloc, _ := ipallocv1v1alpha1.NewFromKubeObject(o)
 			prefix := alloc.GetAllocatedPrefix()
 
 			forObj.SetAnnotation("prefix", prefix)

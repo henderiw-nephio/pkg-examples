@@ -14,15 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package kptcondsdk
+package condkptsdk
 
 import (
+	"fmt"
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
 )
 
-type Inventory interface {
+type inventory interface {
 	// initializeGVKInventory initializes the GVK with the generic GVK
 	// resources as specified in the SDKConfig
 	// used to provide faster loopup if the GVK is relevant for the fn/controller
@@ -33,7 +34,7 @@ type Inventory interface {
 	// runtime crud operations on the inventory
 	set(kc *gvkKindCtx, refs []corev1.ObjectReference, x any, new newResource) error
 	delete(kc *gvkKindCtx, refs []corev1.ObjectReference) error
-	get(k gvkKind, ref *corev1.ObjectReference) map[corev1.ObjectReference]*resourceCtx
+	get(k gvkKind, refs []corev1.ObjectReference) map[corev1.ObjectReference]*resourceCtx
 	list() [][]sdkObjectReference
 	// readiness
 	isReady() bool
@@ -42,8 +43,8 @@ type Inventory interface {
 	diff() (map[corev1.ObjectReference]*inventoryDiff, error)
 }
 
-func newInventory(cfg *Config) (Inventory, error) {
-	r := &inventory{
+func newInventory(cfg *Config) (inventory, error) {
+	r := &inv{
 		gvkResources: map[corev1.ObjectReference]*gvkKindCtx{},
 		resources: &resources{
 			resources: map[sdkObjectReference]*resources{},
@@ -55,8 +56,8 @@ func newInventory(cfg *Config) (Inventory, error) {
 	return r, nil
 }
 
-type inventory struct {
-	m      sync.RWMutex
+type inv struct {
+	m sync.RWMutex
 	//hasOwn bool
 	// gvkResource contain the gvk based resource from config
 	// they dont contain the names but allow for faster lookups
@@ -73,4 +74,63 @@ const (
 	actionCreate action = "create"
 	actionDelete action = "delete"
 	actionUpdate action = "update"
+	actionGet    action = "get"
 )
+
+// initializeGVKInventory initializes the GVK with the generic GVK
+// resources as specified in the SDKConfig
+// used to provide faster lookup if the GVK is relevant for the fn/controller
+// and to provide context if there is a match
+func (r *inv) initializeGVKInventory(cfg *Config) error {
+	if err := validateGVKRef(cfg.For); err != nil {
+		return err
+	}
+	if err := r.addGVKObjectReference(&gvkKindCtx{gvkKind: forGVKKind}, cfg.For); err != nil {
+		return err
+	}
+	for ref, ok := range cfg.Owns {
+		if err := validateGVKRef(ref); err != nil {
+			return err
+		}
+		if err := r.addGVKObjectReference(&gvkKindCtx{gvkKind: ownGVKKind, ownKind: ok}, ref); err != nil {
+			return err
+		}
+	}
+	for ref, cb := range cfg.Watch {
+		if err := validateGVKRef(ref); err != nil {
+			return err
+		}
+		if err := r.addGVKObjectReference(&gvkKindCtx{gvkKind: watchGVKKind, callbackFn: cb}, ref); err != nil {
+			return err
+		}
+	}
+	if cfg.GenerateResourceFn == nil {
+		return fmt.Errorf("a function always needs a GenerateResource function")
+	}
+	return nil
+}
+
+func (r *inv) addGVKObjectReference(kc *gvkKindCtx, ref corev1.ObjectReference) error {
+	r.m.Lock()
+	defer r.m.Unlock()
+
+	// validates if we GVK(s) were added to the same context
+	if resCtx, ok := r.gvkResources[corev1.ObjectReference{APIVersion: ref.APIVersion, Kind: ref.Kind}]; ok {
+		return fmt.Errorf("another resource with a different kind %s already exists", resCtx.gvkKind)
+	}
+	r.gvkResources[corev1.ObjectReference{APIVersion: ref.APIVersion, Kind: ref.Kind}] = kc
+	return nil
+}
+
+func (r *inv) isGVKMatch(ref *corev1.ObjectReference) (*gvkKindCtx, bool) {
+	r.m.RLock()
+	defer r.m.RUnlock()
+	if ref == nil {
+		return nil, false
+	}
+	kindCtx, ok := r.gvkResources[corev1.ObjectReference{APIVersion: ref.APIVersion, Kind: ref.Kind}]
+	if !ok {
+		return nil, false
+	}
+	return kindCtx, true
+}

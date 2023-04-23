@@ -104,7 +104,7 @@ func TestNewFromGoStruct(t *testing.T) {
 		},
 		"TestNewFromGoStructNil": {
 			input:       nil,
-			errExpected: true,
+			errExpected: false, // new approach does not return an error
 		},
 	}
 
@@ -140,10 +140,10 @@ func TestGetKubeObject(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 
-			if diff := cmp.Diff(tc.wantKind, i.GetKubeObject().GetKind()); diff != "" {
+			if diff := cmp.Diff(tc.wantKind, i.GetKind()); diff != "" {
 				t.Errorf("TestGetKubeObject: -want, +got:\n%s", diff)
 			}
-			if diff := cmp.Diff(tc.wantName, i.GetKubeObject().GetName()); diff != "" {
+			if diff := cmp.Diff(tc.wantName, i.GetName()); diff != "" {
 				t.Errorf("TestGetKubeObject: -want, +got:\n%s", diff)
 			}
 		})
@@ -280,12 +280,12 @@ func TestSetAttachmentType(t *testing.T) {
 	}{
 		"SetAttachmentTypeNormal": {
 			file:        itface,
-			value:       nephioreqv1alpha1.AttachmentTypeNone,
+			value:       "none",
 			errExpected: false,
 		},
 		"SetAttachmentTypeEmpty": {
 			file:        itfaceEmpty,
-			value:       nephioreqv1alpha1.AttachmentTypeVLAN,
+			value:       "vlan",
 			errExpected: false,
 		},
 	}
@@ -303,7 +303,7 @@ func TestSetAttachmentType(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				got := i.GetAttachmentType()
-				if diff := cmp.Diff(tc.value, got); diff != "" {
+				if diff := cmp.Diff(tc.value, nephioreqv1alpha1.AttachmentType(got)); diff != "" {
 					t.Errorf("TestSetAttachmentType: -want, +got:\n%s", diff)
 				}
 			}
@@ -320,12 +320,12 @@ func TestSetCNIType(t *testing.T) {
 	}{
 		"SetCNITypeNormal": {
 			file:        itface,
-			value:       nephioreqv1alpha1.CNITypeIPVLAN,
+			value:       "ipvlan",
 			errExpected: false,
 		},
 		"SetCNITypeEmpty": {
 			file:        itfaceEmpty,
-			value:      nephioreqv1alpha1.CNITypeSRIOV,
+			value:       "sriov",
 			errExpected: false,
 		},
 	}
@@ -343,7 +343,7 @@ func TestSetCNIType(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				got := i.GetCNIType()
-				if diff := cmp.Diff(tc.value, got); diff != "" {
+				if diff := cmp.Diff(tc.value, nephioreqv1alpha1.CNIType(got)); diff != "" {
 					t.Errorf("TestSetCNIType: -want, +got:\n%s", diff)
 				}
 			}
@@ -499,7 +499,7 @@ func TestDeleteCNIType(t *testing.T) {
 		}
 
 		t.Run(name, func(t *testing.T) {
-			err := i.DeleteCNIType()
+			_, err := i.DeleteCNIType()
 			assert.NoError(t, err)
 
 		})
@@ -525,7 +525,7 @@ func TestDeleteAttachmentType(t *testing.T) {
 		}
 
 		t.Run(name, func(t *testing.T) {
-			err := i.DeleteAttachmentType()
+			_, err := i.DeleteAttachmentType()
 			assert.NoError(t, err)
 
 		})
@@ -572,10 +572,8 @@ func TestYamlComments(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			o := i.GetKubeObject()
-
-			if o.String() != string(tc.input) {
-				t.Errorf("expected output to be %q, but got %q", string(tc.input), o.String())
+			if i.String() != string(tc.input) {
+				t.Errorf("expected output to be %q, but got %q", string(tc.input), i.String())
 			}
 		})
 	}
