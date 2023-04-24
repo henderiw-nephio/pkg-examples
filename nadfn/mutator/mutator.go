@@ -6,7 +6,8 @@ import (
 
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
 	clusterctxtlibv1alpha1 "github.com/henderiw-nephio/pkg-examples/pkg/clustercontext/v1alpha1"
-
+	nephioreqv1alpha1 "github.com/nephio-project/api/nf_requirements/v1alpha1"
+	interfacelibv1alpha1 "github.com/henderiw-nephio/pkg-examples/pkg/interface/v1alpha1"
 	//ipallocv1v1alpha1 "github.com/henderiw-nephio/pkg-examples/pkg/ipallocation/v1alpha1"
 	condkptsdk "github.com/henderiw-nephio/pkg-examples/pkg/condkptsdk"
 	ipalloclibv1alpha1 "github.com/henderiw-nephio/pkg-examples/pkg/ipallocation/v1alpha1"
@@ -43,6 +44,10 @@ func Run(rl *fn.ResourceList) (bool, error) {
 				{
 					APIVersion: ipamv1alpha1.GroupVersion.Identifier(),
 					Kind:       ipamv1alpha1.IPAllocationKind,
+				}: nil,
+				{
+					APIVersion: nephioreqv1alpha1.GroupVersion.Identifier(),
+					Kind:       nephioreqv1alpha1.InterfaceKind,
 				}: nil,
 			},
 			PopulateOwnResourcesFn: nil,
@@ -98,6 +103,19 @@ func (r *mutatorCtx) generateResourceFn(forObj *fn.KubeObject, objs fn.KubeObjec
 	fn.Logf("cniType: %s, masterInterface: %s\n", r.cniType, r.masterInterface)
 	nad.SetCNIType(r.cniType) // cniType should come from interface
 	nad.SetNadMaster(r.masterInterface)
+
+	itfces := objs.Where(fn.IsGroupVersionKind(nephioreqv1alpha1.InterfaceGroupVersionKind)) 
+	for _, itfce := range itfces {
+		i, err := interfacelibv1alpha1.NewFromKubeObject(itfce)
+		if err != nil {
+			return nil, err
+		}
+		itfceGoStruct, err := i.GetGoStruct()
+		if err != nil {
+			return nil, err
+		}
+		nad.SetCNIType(string(itfceGoStruct.Spec.CNIType))
+	}
 
 	ipallocs := objs.Where(fn.IsGroupVersionKind(ipamv1alpha1.IPAllocationGroupVersionKind))
 	for _, ipalloc := range ipallocs {

@@ -10,6 +10,3 @@ spec:
   cniType: sriov
   attachementType: vlan
 status:
-  ipAllocationStatus:
-    prefix: 13.0.0.3/24
-    gateway: 13.0.0.1

@@ -12,5 +12,5 @@ spec:
   networkInstance:
     name: vpc-internal
 status:
-  prefix: 14.0.0.3/24
+  prefix: 14.0.0.2/24
   gateway: 14.0.0.1
