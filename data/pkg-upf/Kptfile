@@ -11,8 +11,8 @@ info:
 pipeline: {}
 status:
   conditions:
-  - message: update for condition
-    status: "False"
+  - message: update done
+    status: "True"
     type: req.nephio.org/v1alpha1.Interface.n4
   - message: create resource
     reason: req.nephio.org/v1alpha1.Interface.n4
@@ -22,8 +22,8 @@ status:
     reason: req.nephio.org/v1alpha1.Interface.n4
     status: "True"
     type: k8s.cni.cncf.io/v1.NetworkAttachmentDefinition.n4
-  - message: update for condition
-    status: "False"
+  - message: update done
+    status: "True"
     type: req.nephio.org/v1alpha1.Interface.n6
   - message: update done
     reason: req.nephio.org/v1alpha1.Interface.n6
@@ -33,8 +33,8 @@ status:
     reason: req.nephio.org/v1alpha1.Interface.n6
     status: "True"
     type: ipam.alloc.nephio.org/v1alpha1.IPAllocation.n6
-  - message: update for condition
-    status: "False"
+  - message: update done
+    status: "True"
     type: req.nephio.org/v1alpha1.Interface.n3
   - message: update done
     reason: req.nephio.org/v1alpha1.Interface.n3
@@ -44,3 +44,10 @@ status:
     reason: req.nephio.org/v1alpha1.Interface.n3
     status: "True"
     type: ipam.alloc.nephio.org/v1alpha1.IPAllocation.n3
+  - message: update done
+    status: "True"
+    type: req.nephio.org/v1alpha1.DataNetwork.internet
+  - message: create resource
+    reason: req.nephio.org/v1alpha1.DataNetwork.internet
+    status: "True"
+    type: ipam.alloc.nephio.org/v1alpha1.IPAllocation.internet-pool1
