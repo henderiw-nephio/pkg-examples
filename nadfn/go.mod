@@ -8,6 +8,7 @@ require (
 	github.com/GoogleContainerTools/kpt-functions-sdk/go/fn v0.0.0-20230302070146-e8e9cb3c3ae2
 	github.com/henderiw-nephio/pkg-examples v0.0.0-00010101000000-000000000000
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.4.0
+	github.com/nephio-project/api v0.0.0-20230421174414-507255314347
 	github.com/nephio-project/nephio-controller-poc v0.0.2
 	github.com/nokia/k8s-ipam v0.0.4-0.20230416191338-dcd944a8d636
 	k8s.io/api v0.27.1
