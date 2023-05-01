@@ -120,10 +120,10 @@ github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 h1:n6/
 github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00/go.mod h1:Pm3mSP3c5uWn86xMLZ5Sa7JB9GsEZySvHYXCTK4E9q4=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
-github.com/nephio-project/api v0.0.0-20230421174414-507255314347 h1:MiQmYHqGzvGOwf9+6KOEHDOoJ9m8W9bnxQQL9UcaJrc=
-github.com/nephio-project/api v0.0.0-20230421174414-507255314347/go.mod h1:ti2CdEDwuN+6l0pypPq0vwibZZKap0sEjJlMNLgcaHM=
-github.com/nephio-project/nephio v0.0.0-20230421173715-e23510d07a06 h1:HJiHfKh41fzePGesFOjWXmGdUPNqgWELiNxTzCnj0vk=
-github.com/nephio-project/nephio v0.0.0-20230421173715-e23510d07a06/go.mod h1:S4OWSJQPoO6QHViXJEasFxmb4PheQmvyJcZ5McbeQVk=
+github.com/nephio-project/api v0.0.0-20230427222620-ebcbeb2c21e3 h1:AZNf2QZxh0CgFtIcLpVUPY/MLtvEyxI3bRudnSJX5B8=
+github.com/nephio-project/api v0.0.0-20230427222620-ebcbeb2c21e3/go.mod h1:ti2CdEDwuN+6l0pypPq0vwibZZKap0sEjJlMNLgcaHM=
+github.com/nephio-project/nephio v0.0.0-20230430115622-89c76dea2d39 h1:2g61jdDEwdU2k9fXFgjei8+B42xH5pcK8N8U8WfWCNI=
+github.com/nephio-project/nephio v0.0.0-20230430115622-89c76dea2d39/go.mod h1:vUWmnYgnP0tC92cfxTtAtwaGLnn7jBc1ZbyAn0rgtG8=
 github.com/nephio-project/nephio-controller-poc v0.0.2 h1:0iSooKeWzqmcTiLLfAzA4oWTWNzvOc7qcfVN+ctYexI=
 github.com/nephio-project/nephio-controller-poc v0.0.2/go.mod h1:oE13Jb5gopskPCv0YERhXwqxWIbp6uVsma/uxuP/jKc=
 github.com/nokia/k8s-ipam v0.0.4-0.20230416191338-dcd944a8d636 h1:D2wTzwXxdXwEf5F6edQrUdSujPiHAcxA3vD7WL4MnmM=
@@ -139,8 +139,8 @@ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZN
 github.com/prometheus/client_golang v1.15.0 h1:5fCgGYogn0hFdhyhLbw7hEsWxufKtY9klyvdNfFlFhM=
 github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4/go.mod h1:xMI15A0UPsDsEKsMN9yxemIoYk6Tm2C1GtYGdfGttqA=
 github.com/prometheus/client_model v0.3.0 h1:UBgGFHqYdG/TPFD1B1ogZywDqEkwp3fBMvqdiQ7Xew4=
-github.com/prometheus/common v0.42.0 h1:EKsfXEYo4JpWMHH5cg+KOUWeuJSov1Id8zGR8eeI1YM=
-github.com/prometheus/procfs v0.9.0 h1:wzCHvIvM5SxWqYvwgVL7yJY8Lz3PKn49KQtpgMYJfhI=
+github.com/prometheus/common v0.37.0 h1:ccBbHCgIiT9uSoFY0vX8H3zsNR5eLt17/RQLUvn8pXE=
+github.com/prometheus/procfs v0.8.0 h1:ODq8ZFEaYeCaZOJlZZdJA2AbQR98dSHSM1KW/You5mo=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
 github.com/rogpeppe/go-internal v1.10.0 h1:TMyTOH3F/DB16zRVcYyreMH6GnZZrwQVAoYjRBZyWFQ=
 github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=

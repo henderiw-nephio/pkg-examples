@@ -1,0 +1,11 @@
+apiVersion: vlan.alloc.nephio.org/v1alpha1
+kind: VLANAllocation
+metadata:
+  name: n4
+  annotations:
+    specializer.nephio.org/owner: req.nephio.org/v1alpha1.Interface.n4
+spec:
+  vlanDatabase:
+    name: edge1
+status:
+  vlanID: 10

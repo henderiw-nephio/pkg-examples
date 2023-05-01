@@ -5,12 +5,10 @@ import (
 	"reflect"
 
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
-	clusterctxtlibv1alpha1 "github.com/henderiw-nephio/pkg-examples/pkg/clustercontext/v1alpha1"
-	condkptsdk "github.com/henderiw-nephio/pkg-examples/pkg/condkptsdk"
-	dnnlibv1alpha1 "github.com/henderiw-nephio/pkg-examples/pkg/dnn/v1alpha1"
-	ipallocv1v1alpha1 "github.com/henderiw-nephio/pkg-examples/pkg/ipallocation/v1alpha1"
+	ko "github.com/henderiw-nephio/pkg-examples/pkg/kubeobject"
 	nephioreqv1alpha1 "github.com/nephio-project/api/nf_requirements/v1alpha1"
 	infrav1alpha1 "github.com/nephio-project/nephio-controller-poc/apis/infra/v1alpha1"
+	"github.com/nephio-project/nephio/krm-functions/lib/condkptsdk"
 	allocv1alpha1 "github.com/nokia/k8s-ipam/apis/alloc/common/v1alpha1"
 	ipamv1alpha1 "github.com/nokia/k8s-ipam/apis/alloc/ipam/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -18,14 +16,14 @@ import (
 )
 
 type mutatorCtx struct {
-	fnCondSdk condkptsdk.KptCondSDK
-	siteCode  string
+	sdk      condkptsdk.KptCondSDK
+	siteCode string
 }
 
 func Run(rl *fn.ResourceList) (bool, error) {
 	m := mutatorCtx{}
 	var err error
-	m.fnCondSdk, err = condkptsdk.New(
+	m.sdk, err = condkptsdk.New(
 		rl,
 		&condkptsdk.Config{
 			For: corev1.ObjectReference{
@@ -44,48 +42,68 @@ func Run(rl *fn.ResourceList) (bool, error) {
 					Kind:       reflect.TypeOf(infrav1alpha1.ClusterContext{}).Name(),
 				}: m.ClusterContextCallbackFn,
 			},
-			PopulateOwnResourcesFn: m.populateInterfaceFn,
-			GenerateResourceFn:     m.generateResourceFn,
+			PopulateOwnResourcesFn: m.desiredOwnedResourceList,
+			GenerateResourceFn:     m.updateDnnResource,
 		},
 	)
 	if err != nil {
 		rl.Results = append(rl.Results, fn.ErrorConfigObjectResult(err, nil))
 	}
-	return m.fnCondSdk.Run()
+	return m.sdk.Run()
 }
 
+// ClusterContextCallbackFn provides a callback for the cluster context
+// resources in the resourceList
 func (r *mutatorCtx) ClusterContextCallbackFn(o *fn.KubeObject) error {
-	clusterContext := clusterctxtlibv1alpha1.NewMutator(o.String())
-	cluster, err := clusterContext.UnMarshal()
+	clusterKOE, err := ko.NewFromKubeObject[*infrav1alpha1.ClusterContext](o)
 	if err != nil {
 		return err
 	}
-	r.siteCode = *cluster.Spec.SiteCode
+	clusterContext, err := clusterKOE.GetGoStruct()
+	if err != nil {
+		return err
+	}
+	if clusterContext.Spec.SiteCode == nil {
+		return fmt.Errorf("mandatory field `siteCode` is missing from ClusterContext %q", clusterContext.Name)
+	}
+	if r.siteCode != "" && r.siteCode != *clusterContext.Spec.SiteCode {
+		return fmt.Errorf("multiple ClusterContext objects with confliciting `siteCode` fields found in the package")
+	}
+	r.siteCode = *clusterContext.Spec.SiteCode
+	if clusterContext.Spec.CNIConfig == nil {
+		return fmt.Errorf("mandatory field `cniConfig` is missing from ClusterContext %q", clusterContext.Name)
+	}
 	return nil
 }
 
-func (r *mutatorCtx) populateInterfaceFn(o *fn.KubeObject) (fn.KubeObjects, error) {
+func (r *mutatorCtx) desiredOwnedResourceList(o *fn.KubeObject) (fn.KubeObjects, error) {
 	resources := fn.KubeObjects{}
 
-	dnn := dnnlibv1alpha1.NewFromKubeObject(o)
+	dnnKOE, err := ko.NewFromKubeObject[nephioreqv1alpha1.DataNetwork](o)
+	if err != nil {
+		return nil, err
+	}
+	dnn, err := dnnKOE.GetGoStruct()
+	if err != nil {
+		return nil, err
+	}
 
-	for _, pool := range dnn.GetPools() {
+	for _, pool := range dnn.Spec.Pools {
 		alloc := ipamv1alpha1.BuildIPAllocation(
 			metav1.ObjectMeta{
-				//Name: o.GetName(),
 				Name: fmt.Sprintf("%s-%s", o.GetName(), pool.Name),
 			},
 			ipamv1alpha1.IPAllocationSpec{
-				PrefixKind: ipamv1alpha1.PrefixKindPool,
-				NetworkInstance: &corev1.ObjectReference{
-					Name: dnn.GetNetworkInstanceName(),
-				},
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						allocv1alpha1.NephioSiteKey: r.siteCode,
+				Kind:            ipamv1alpha1.PrefixKindPool,
+				NetworkInstance: dnn.Spec.NetworkInstance,
+				AllocationLabels: allocv1alpha1.AllocationLabels{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							allocv1alpha1.NephioSiteKey: r.siteCode,
+						},
 					},
 				},
-				PrefixLength: pool.PrefixLength,
+				PrefixLength: &pool.PrefixLength,
 			},
 			ipamv1alpha1.IPAllocationStatus{},
 		)
@@ -99,18 +117,33 @@ func (r *mutatorCtx) populateInterfaceFn(o *fn.KubeObject) (fn.KubeObjects, erro
 	return resources, nil
 }
 
-func (r *mutatorCtx) generateResourceFn(forObj *fn.KubeObject, objs fn.KubeObjects) (*fn.KubeObject, error) {
+func (r *mutatorCtx) updateDnnResource(forObj *fn.KubeObject, objs fn.KubeObjects) (*fn.KubeObject, error) {
 	// we expect a for object here
 	if forObj == nil {
 		return nil, fmt.Errorf("expected a for object but got nil")
 	}
-	for _, o := range objs {
-		if o.GetAPIVersion() == ipamv1alpha1.GroupVersion.Identifier() && o.GetKind() == ipamv1alpha1.IPAllocationKind {
-			alloc, _ := ipallocv1v1alpha1.NewFromKubeObject(o)
-			prefix := alloc.GetAllocatedPrefix()
-
-			forObj.SetAnnotation("prefix", prefix)
-		}
+	dnnKOE, err := ko.NewFromKubeObject[nephioreqv1alpha1.DataNetwork](forObj)
+	if err != nil {
+		return nil, err
 	}
-	return forObj, nil
+	dnn, err := dnnKOE.GetGoStruct()
+	if err != nil {
+		return nil, err
+	}
+	ipallocs := objs.Where(fn.IsGroupVersionKind(ipamv1alpha1.IPAllocationGroupVersionKind))
+	for _, ipalloc := range ipallocs {
+		alloc, err := ko.NewFromKubeObject[*ipamv1alpha1.IPAllocation](ipalloc)
+		if err != nil {
+			return nil, err
+		}
+		allocGoStruct, err := alloc.GetGoStruct()
+		if err != nil {
+			return nil, err
+		}
+		// todo update pool status
+		dnn.Status.Pools = append(dnn.Status.Pools, nephioreqv1alpha1.PoolStatus{Name: alloc.GetName(), IPAllocation: allocGoStruct.Status})
+
+	}
+	err = dnnKOE.SetFromTypedObject(dnn)
+	return &dnnKOE.KubeObject, err
 }

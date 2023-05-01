@@ -1,8 +1,0 @@
-apiVersion: k8s.cni.cncf.io/v1
-kind: NetworkAttachmentDefinition
-metadata:
-  name: n3
-  annotations:
-    fnruntime.nephio.org/owner: req.nephio.org/v1alpha1.Interface.n3
-spec:
-  config: '{"cniVersion":"","vlan":0,"plugins":[{"type":"sriov","capabilities":{"ips":false,"mac":false},"master":"","mode":"","ipam":{"type":"","addresses":[{"address":"13.0.0.2/24","gateway":"13.0.0.1"}]}}]}'

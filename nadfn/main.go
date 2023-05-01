@@ -12,13 +12,4 @@ func main() {
 	if err := fn.AsMain(fn.ResourceListProcessorFunc(mutator.Run)); err != nil {
 		os.Exit(1)
 	}
-	//if err := fn.AsMain(fn.ResourceListProcessorFunc(nfdeployfn.Run)); err != nil {
-	//	os.Exit(1)
-	//}
-	//if err := fn.AsMain(fn.ResourceListProcessorFunc(nadfn.Run)); err != nil {
-	//	os.Exit(1)
-	//}
-	//if err := fn.AsMain(fn.ResourceListProcessorFunc(dnnfn.Run)); err != nil {
-	//	os.Exit(1)
-	//}
 }

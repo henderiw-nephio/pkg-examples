@@ -220,10 +220,10 @@ func (r *Nad) SetCNIType(cniType string) error {
 			Plugins: []PluginCniType{{}},
 		}
 		/*
-		r.NestedSubObject()
-		if err := json.Unmarshal([]byte(r.GetStringValue(ConfigType...)), &nadConfigStruct); err != nil {
-			panic(err)
-		}
+			r.NestedSubObject()
+			if err := json.Unmarshal([]byte(r.GetStringValue(ConfigType...)), &nadConfigStruct); err != nil {
+				panic(err)
+			}
 		*/
 		nadConfigStruct.Plugins[0].Type = cniType
 		b, err := json.Marshal(nadConfigStruct)
@@ -287,7 +287,7 @@ func (r *Nad) SetIpamAddress(ipam []Addresses) error {
 	}
 }
 
-func BuildNetworkAttachementDefinition(meta metav1.ObjectMeta, spec nadv1.NetworkAttachmentDefinitionSpec) *nadv1.NetworkAttachmentDefinition {
+func BuildNetworkAttachmentDefinition(meta metav1.ObjectMeta, spec nadv1.NetworkAttachmentDefinitionSpec) *nadv1.NetworkAttachmentDefinition {
 	return &nadv1.NetworkAttachmentDefinition{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: nadv1.SchemeGroupVersion.Identifier(),

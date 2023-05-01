@@ -4,3 +4,5 @@ use ./interfacefn
 use ./nadfn
 use ./dnnfn
 use ./nfdeployfn
+use ./ipamfn
+use ./vlanfn

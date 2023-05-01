@@ -3,7 +3,7 @@ kind: IPAllocation
 metadata:
   name: n3
   annotations:
-    fnruntime.nephio.org/owner: req.nephio.org/v1alpha1.Interface.n3
+    specializer.nephio.org/owner: req.nephio.org/v1alpha1.Interface.n3
 spec:
   kind: network
   selector:
@@ -12,5 +12,5 @@ spec:
   networkInstance:
     name: vpc-ran
 status:
-  prefix: 13.0.0.2/24
-  gateway: 13.0.0.1
+  prefix: 10.0.0.10
+  gateway: 10.0.0.1

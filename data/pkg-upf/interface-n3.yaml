@@ -8,5 +8,5 @@ spec:
   networkInstance:
     name: vpc-ran
   cniType: sriov
-  attachementType: vlan
-status: {ipAllocationStatus: {prefix: 13.0.0.2/24, gateway: 13.0.0.1}}
+  attachmentType: vlan
+status: {}
