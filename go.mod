@@ -6,7 +6,6 @@ require (
 	github.com/GoogleContainerTools/kpt-functions-sdk/go/fn v0.0.0-20230302070146-e8e9cb3c3ae2
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.4.0
 	github.com/nephio-project/nephio v0.0.0-20230430115622-89c76dea2d39
-	k8s.io/api v0.27.1
 	k8s.io/apimachinery v0.27.1
 	sigs.k8s.io/kustomize/kyaml v0.14.1
 )
