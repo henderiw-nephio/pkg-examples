@@ -15,22 +15,21 @@ import (
 )
 
 func main() {
-	if err := fn.AsMain(fn.ResourceListProcessorFunc(Run)); err != nil {
+	r := &FnR{
+		IpamClientProxy: ipam.NewMock(),
+	}
+
+	if err := fn.AsMain(fn.ResourceListProcessorFunc(r.Run)); err != nil {
 		os.Exit(1)
 	}
 }
 
-type fnCtx struct {
-	sdk             condkptsdk.KptCondSDK
+type FnR struct {
 	IpamClientProxy clientproxy.Proxy[*ipamv1alpha1.NetworkInstance, *ipamv1alpha1.IPAllocation]
 }
 
-func Run(rl *fn.ResourceList) (bool, error) {
-	fnCtx := fnCtx{
-		IpamClientProxy: ipam.NewMock(),
-	}
-	var err error
-	fnCtx.sdk, err = condkptsdk.New(
+func (r *FnR) Run(rl *fn.ResourceList) (bool, error) {
+	sdk, err := condkptsdk.New(
 		rl,
 		&condkptsdk.Config{
 			For: corev1.ObjectReference{
@@ -38,17 +37,17 @@ func Run(rl *fn.ResourceList) (bool, error) {
 				Kind:       ipamv1alpha1.IPAllocationKind,
 			},
 			PopulateOwnResourcesFn: nil,
-			GenerateResourceFn:     fnCtx.updateIPAllocationResource,
+			GenerateResourceFn:     r.updateIPAllocationResource,
 		},
 	)
 	if err != nil {
 		rl.Results.ErrorE(err)
 		return false, nil
 	}
-	return fnCtx.sdk.Run()
+	return sdk.Run()
 }
 
-func (r *fnCtx) updateIPAllocationResource(forObj *fn.KubeObject, objs fn.KubeObjects) (*fn.KubeObject, error) {
+func (r *FnR) updateIPAllocationResource(forObj *fn.KubeObject, objs fn.KubeObjects) (*fn.KubeObject, error) {
 	if forObj == nil {
 		return nil, fmt.Errorf("expected a for object but got nil")
 	}
@@ -74,6 +73,7 @@ func (r *fnCtx) updateIPAllocationResource(forObj *fn.KubeObject, objs fn.KubeOb
 		fn.Logf("ipalloc resp gateway: %v\n", *resp.Status.Gateway)
 	}
 	// set the status
-	err = allocKOE.SetStatus(resp.Status)
+	//err = allocKOE.SetStatus(resp.Status)
+	err = allocKOE.SetFromTypedObject(resp)
 	return &allocKOE.KubeObject, err
 }

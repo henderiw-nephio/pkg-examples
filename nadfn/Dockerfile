@@ -2,7 +2,7 @@ FROM golang:1.19.2-alpine3.15
 ENV CGO_ENABLED=0
 WORKDIR /go/src/
 COPY go.mod go.sum ./
-COPY nadfn/go.mod interfacefn/go.sum nadfn/
+COPY nadfn/go.mod nadfn/go.sum nadfn/
 RUN go mod download
 RUN cd nadfn && go mod download
 COPY . .

@@ -38,7 +38,7 @@ func Run(rl *fn.ResourceList) (bool, error) {
 				Kind:       vlanv1alpha1.VLANAllocationKind,
 			},
 			PopulateOwnResourcesFn: nil,
-			GenerateResourceFn:     fnCtx.updateIPAllocationResource,
+			GenerateResourceFn:     fnCtx.updateVLANAllocationResource,
 		},
 	)
 	if err != nil {
@@ -48,7 +48,7 @@ func Run(rl *fn.ResourceList) (bool, error) {
 	return fnCtx.sdk.Run()
 }
 
-func (r *fnCtx) updateIPAllocationResource(forObj *fn.KubeObject, objs fn.KubeObjects) (*fn.KubeObject, error) {
+func (r *fnCtx) updateVLANAllocationResource(forObj *fn.KubeObject, objs fn.KubeObjects) (*fn.KubeObject, error) {
 	if forObj == nil {
 		return nil, fmt.Errorf("expected a for object but got nil")
 	}

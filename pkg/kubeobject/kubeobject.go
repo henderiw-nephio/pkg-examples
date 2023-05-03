@@ -85,10 +85,6 @@ func (o *KubeObjectExt[T1]) SetFromTypedObject(value T1) error {
 	return safeSetNestedFieldKeepFormatting(&o.KubeObject, value)
 }
 
-// NOTE: the following functions are considered as "methods" of KubeObject,
-// and thus nill checking of `obj` was omitted intentionally:
-// the caller is responsible for ensuring that `obj` is not nil`
-
 // setNestedFieldKeepFormatting is similar to KubeObject.SetNestedField(), but keeps the
 // comments and the order of fields in the YAML wherever it is possible.
 //
@@ -96,12 +92,22 @@ func (o *KubeObjectExt[T1]) SetFromTypedObject(value T1) error {
 // Merging the code below to the upstream SDK is in progress and tracked in this issue:
 // https://github.com/GoogleContainerTools/kpt/issues/3923
 func safeSetNestedFieldKeepFormatting(obj *fn.KubeObject, value interface{}, fields ...string) error {
-	oldNode := yamlNodeOf2(&obj.SubObject)
-	err := obj.SetNestedField(value, fields...)
-	if err != nil {
-		return err
+	var obj2 *fn.KubeObject
+
+	oldNode := yamlNodeOf(&obj.SubObject)
+	if len(fields) == 0 {
+		obj2, err := fn.NewFromTypedObject(value)
+		if err != nil {
+			return err
+		}
+		*obj = *obj2
+	} else {
+		err := obj.SetNestedField(value, fields...)
+		if err != nil {
+			return err
+		}
 	}
-	newNode := yamlNodeOf2(&obj.SubObject)
+	newNode := yamlNodeOf(&obj.SubObject)
 
 	if oldNode.Kind != yaml.DocumentNode || len(oldNode.Content) == 0 ||
 		newNode.Kind != yaml.DocumentNode || len(newNode.Content) == 0 {
@@ -115,7 +121,7 @@ func safeSetNestedFieldKeepFormatting(obj *fn.KubeObject, value interface{}, fie
 		return fmt.Errorf("unexpected error during round-trip YAML parsing (ToYAML): %v", err)
 	}
 
-	obj2, err := fn.ParseKubeObject(b)
+	obj2, err = fn.ParseKubeObject(b)
 	if err != nil {
 		return fmt.Errorf("unexpected error during round-trip YAML parsing (ParseKubeObject): %v", err)
 	}
@@ -212,7 +218,7 @@ func findKey(m *yaml.Node, key string) (int, bool) {
 	return 0, false
 }
 
-func yamlNodeOf2(obj *fn.SubObject) *yaml.Node {
+func yamlNodeOf(obj *fn.SubObject) *yaml.Node {
 	var node *yaml.Node
 	yamlBytes := []byte(obj.String())
 	node, err := parseFirstObj(yamlBytes)

@@ -2,7 +2,7 @@ module github.com/henderiw-nephio/pkg-examples/nadfn
 
 go 1.20
 
-replace github.com/henderiw-nephio/pkg-examples => ../
+//replace github.com/henderiw-nephio/pkg-examples => ../
 
 require (
 	github.com/GoogleContainerTools/kpt-functions-sdk/go/fn v0.0.0-20230302070146-e8e9cb3c3ae2

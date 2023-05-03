@@ -1,4 +1,4 @@
-module github.com/henderiw-nephio/pkg-examples/ipamfn
+module github.com/henderiw-nephio/pkg-examples/vlanfn
 
 go 1.20
 
